@@ -1,0 +1,11 @@
+interface:
+  display_name: "lihi-switch-domain"
+  short_description: "Switch the active lihi short URL domain"
+  default_prompt: "Use $lihi-switch-domain to switch my active lihi short URL domain."
+dependencies:
+  tools:
+    - type: "mcp"
+      value: "lihi"
+      description: "lihi account and short URL domain service"
+      transport: "streamable_http"
+      url: "https://app.lihi.com/mcp/v1/tools"
