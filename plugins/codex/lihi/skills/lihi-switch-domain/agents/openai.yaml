@@ -8,4 +8,4 @@ dependencies:
       value: "lihi"
       description: "lihi account and short URL domain service"
       transport: "streamable_http"
-      url: "https://app.lihi.com/mcp/v1/tools"
+      url: "https://app.lihi.io/mcp/v1/tools"

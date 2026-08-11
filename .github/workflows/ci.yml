@@ -1,0 +1,98 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - develop
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Test (Python 3.8)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Set up Python 3.8
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: "3.8"
+
+      - name: Run unit tests
+        run: python -m unittest discover -s tests -v
+
+  code-check:
+    name: Code check
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Set up Python 3.8
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: "3.8"
+
+      - name: Check Python syntax
+        run: >-
+          python -m compileall -q
+          scripts
+          tests
+          plugins/codex/lihi/skills/lihi-shorten/scripts
+          plugins/claude/lihi/skills/lihi-shorten/scripts
+
+      - name: Check Codex and Claude parity
+        run: |
+          cmp plugins/codex/lihi/skills/lihi-shorten/scripts/detect_urls.py plugins/claude/lihi/skills/lihi-shorten/scripts/detect_urls.py
+          cmp plugins/codex/lihi/skills/lihi-shorten/references/shortening-workflow.md plugins/claude/lihi/skills/lihi-shorten/references/shortening-workflow.md
+          cmp plugins/codex/lihi/skills/lihi-switch-group/references/error-recovery.md plugins/claude/lihi/skills/lihi-switch-group/references/error-recovery.md
+          cmp plugins/codex/lihi/skills/lihi-switch-domain/references/error-recovery.md plugins/claude/lihi/skills/lihi-switch-domain/references/error-recovery.md
+
+      - name: Check whitespace errors
+        run: git diff --check "$(git hash-object -t tree /dev/null)" HEAD -- .
+
+  package:
+    name: Package develop bundle
+    if: >-
+      github.event_name != 'pull_request' &&
+      github.ref != 'refs/heads/main'
+    needs:
+      - test
+      - code-check
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Set up Python 3.8
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: "3.8"
+
+      - name: Build develop bundle
+        run: >-
+          python scripts/package_develop_bundle.py
+          --output-dir dist
+          --build-number "${{ github.run_number }}"
+          --commit "${{ github.sha }}"
+
+      - name: Upload develop bundle
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: lihi-agent-develop-${{ github.run_number }}
+          path: dist/lihi-agent-*
+          if-no-files-found: error
+          include-hidden-files: true
+          retention-days: 14

@@ -5,7 +5,7 @@
 此 Codex 外掛會註冊遠端 MCP 伺服器 `lihi`：
 
 ```text
-https://app.lihi.com/mcp/v1/tools
+https://app.lihi.io/mcp/v1/tools
 ```
 
 四個技能共用這一個註冊：

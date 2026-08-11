@@ -5,7 +5,7 @@ Other languages: [Traditional Chinese guide](README.zh-TW.md).
 This Claude Code plugin registers the remote MCP server `lihi` at:
 
 ```text
-https://app.lihi.com/mcp/v1/tools
+https://app.lihi.io/mcp/v1/tools
 ```
 
 Its four skills share this single registration:

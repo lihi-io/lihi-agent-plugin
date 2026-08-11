@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Iterable, Tuple
 
 
-PRODUCTION_ORIGIN = "https://app.lihi.com"
+PRODUCTION_ORIGIN = "https://app.lihi.io"
 DEVELOP_ORIGIN = "https://app.lihidev.com"
 PRODUCTION_ENDPOINT = PRODUCTION_ORIGIN + "/mcp/v1/tools"
 DEVELOP_ENDPOINT = DEVELOP_ORIGIN + "/mcp/v1/tools"
@@ -732,8 +732,8 @@ def rewrite_develop_readme(staging_root: Path) -> None:
             Path("README.md"),
             (
                 "The production marketplace is available from "
-                "[weedgood/lihi-agent-plugin.git]"
-                "(https://github.com/weedgood/lihi-agent-plugin.git). "
+                "[lihi-io/lihi-agent-plugin.git]"
+                "(https://github.com/lihi-io/lihi-agent-plugin.git). "
                 "The plugin selector is `{0}`, displayed as `{1}`.".format(
                     DEVELOP_PLUGIN_SELECTOR,
                     DEVELOP_DISPLAY_NAME,
@@ -783,8 +783,18 @@ def rewrite_develop_readme(staging_root: Path) -> None:
             "codex plugin marketplace add .",
         )
         updated = updated.replace(
+            "codex plugin marketplace add "
+            "https://github.com/lihi-io/lihi-agent-plugin.git",
+            "codex plugin marketplace add .",
+        )
+        updated = updated.replace(
             "claude plugin marketplace add "
             "https://github.com/weedgood/lihi-agent-plugin.git",
+            "claude plugin marketplace add .",
+        )
+        updated = updated.replace(
+            "claude plugin marketplace add "
+            "https://github.com/lihi-io/lihi-agent-plugin.git",
             "claude plugin marketplace add .",
         )
         if relative_path == Path("README.md"):

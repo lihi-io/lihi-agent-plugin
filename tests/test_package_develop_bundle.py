@@ -9,7 +9,7 @@ import unittest
 from pathlib import Path
 
 
-PRODUCTION_ENDPOINT = "https://app.lihi.com/mcp/v1/tools"
+PRODUCTION_ENDPOINT = "https://app.lihi.io/mcp/v1/tools"
 DEVELOP_ENDPOINT = "https://app.lihidev.com/mcp/v1/tools"
 PRODUCTION_SKILLS = (
     "lihi-shorten",
