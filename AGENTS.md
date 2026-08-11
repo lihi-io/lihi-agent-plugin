@@ -24,7 +24,7 @@ This repository packages one lihi plugin for Codex and one for Claude Code. Each
 Production endpoint: `https://app.lihi.io/mcp/v1/tools`.
 Develop endpoint: `https://app.lihidev.com/mcp/v1/tools`.
 
-Checked-in runtime files must remain production-only. Develop identities and endpoints may appear in packaging code, CI, tests, and generated artifacts. The server advertises minimum plugin version `0.3.0` through `tools/list` metadata.
+Checked-in runtime files must remain production-only. Develop identities and endpoints may appear in packaging code, CI, tests, and generated artifacts. The server advertises minimum plugin version `0.3.1` through `tools/list` metadata.
 
 ## Host and skill responsibilities
 
@@ -112,7 +112,7 @@ CI runs Python 3.8 unit tests, confirms parity files, builds a develop bundle, a
 - retains singular `skill_name` at root and `plugins[0]` as a deprecated alias equal to `skill_names[0]` for 0.3 compatibility;
 - excludes caches and preserves source runtime files unchanged.
 
-Both manifests must share core version `0.3.0`. Codex may add one cachebuster suffix. When modifying the Codex bundle, run the plugin-creator cachebuster helper last and validate the plugin. Reinstall only when explicitly requested; after reinstall, test from a new conversation.
+Both manifests must share core version `0.3.1`. Codex may add one cachebuster suffix. When modifying the Codex bundle, run the plugin-creator cachebuster helper last and validate the plugin. Reinstall only when explicitly requested; after reinstall, test from a new conversation.
 
 Never commit `dist/`, a develop/localhost runtime URL, or a develop identity in production runtime configuration.
 

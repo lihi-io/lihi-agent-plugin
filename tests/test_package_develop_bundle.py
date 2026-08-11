@@ -77,7 +77,7 @@ class DevelopPackagerTests(unittest.TestCase):
         )
         cls.source_hash_after = tree_hash(cls.repo_root, cls.source_paths)
         cls.source_hash_before = before
-        cls.version = "0.3.0-develop.42"
+        cls.version = "0.3.1-develop.42"
         cls.package = cls.output_dir / ("lihi-agent-" + cls.version)
 
     @classmethod
@@ -96,9 +96,9 @@ class DevelopPackagerTests(unittest.TestCase):
     def test_version_helpers_enforce_shared_semver_core(self):
         self.assertEqual(
             self.packager.semantic_version_core(
-                "0.3.0+codex.cache", Path("manifest.json")
+                "0.3.1+codex.cache", Path("manifest.json")
             ),
-            "0.3.0",
+            "0.3.1",
         )
         with self.assertRaises(self.packager.PackagingError):
             self.packager.semantic_version_core("0.3", Path("manifest.json"))
