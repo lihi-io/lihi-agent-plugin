@@ -3,7 +3,7 @@
 This document defines the 0.3.0 agent-side contract for the production Streamable HTTP endpoint:
 
 ```text
-https://app.lihi.com/mcp/v1/tools
+https://app.lihi.io/mcp/v1/tools
 ```
 
 Codex and Claude Code own transport and OAuth. Each plugin registers one MCP server and exposes the same six tools through four skills. `tools/list` advertises `_meta["lihi/plugin"].minVersion` as `0.3.0`.

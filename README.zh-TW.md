@@ -19,7 +19,7 @@
 正式環境 Streamable HTTP 端點為：
 
 ```text
-https://app.lihi.com/mcp/v1/tools
+https://app.lihi.io/mcp/v1/tools
 ```
 
 ## 安裝

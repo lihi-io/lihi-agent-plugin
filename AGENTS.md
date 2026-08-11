@@ -21,7 +21,7 @@ This repository packages one lihi plugin for Codex and one for Claude Code. Each
 | Group switch | `lihi-switch-group` | `lihi-switch-group-dev` |
 | Domain switch | `lihi-switch-domain` | `lihi-switch-domain-dev` |
 
-Production endpoint: `https://app.lihi.com/mcp/v1/tools`.
+Production endpoint: `https://app.lihi.io/mcp/v1/tools`.
 Develop endpoint: `https://app.lihidev.com/mcp/v1/tools`.
 
 Checked-in runtime files must remain production-only. Develop identities and endpoints may appear in packaging code, CI, tests, and generated artifacts. The server advertises minimum plugin version `0.3.0` through `tools/list` metadata.
