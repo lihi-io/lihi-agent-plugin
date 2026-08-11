@@ -1,0 +1,11 @@
+interface:
+  display_name: "lihi-switch-group"
+  short_description: "Switch the active lihi work group"
+  default_prompt: "Use $lihi-switch-group to switch my active lihi work group."
+dependencies:
+  tools:
+    - type: "mcp"
+      value: "lihi"
+      description: "lihi account and work-group service"
+      transport: "streamable_http"
+      url: "https://app.lihi.com/mcp/v1/tools"

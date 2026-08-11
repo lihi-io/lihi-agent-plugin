@@ -1,0 +1,28 @@
+{
+  "name": "lihi",
+  "displayName": "lihi",
+  "version": "0.3.0",
+  "description": "Connect Claude Code to lihi through one OAuth MCP registration for account status, group and domain switching, and automatic URL shortening.",
+  "author": {
+    "name": "lihi",
+    "url": "https://lihi.io/"
+  },
+  "homepage": "https://lihi.io/",
+  "keywords": [
+    "lihi",
+    "mcp",
+    "oauth",
+    "account",
+    "quota",
+    "subscription",
+    "work-group",
+    "group-switching",
+    "domain-switching",
+    "short-url",
+    "copywriting",
+    "polishing",
+    "publishing"
+  ],
+  "skills": "./skills/",
+  "mcpServers": "./.mcp.json"
+}

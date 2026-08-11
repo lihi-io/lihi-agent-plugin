@@ -1,0 +1,15 @@
+{
+  "name": "lihi",
+  "owner": {
+    "name": "lihi"
+  },
+  "description": "lihi agent integrations",
+  "plugins": [
+    {
+      "name": "lihi",
+      "displayName": "lihi",
+      "source": "./plugins/claude/lihi",
+      "description": "Connect to lihi through one OAuth MCP registration for account status, group and domain switching, and automatic URL shortening."
+    }
+  ]
+}

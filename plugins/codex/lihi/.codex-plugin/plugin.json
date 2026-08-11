@@ -1,0 +1,46 @@
+{
+  "name": "lihi",
+  "version": "0.3.0+codex.20260810060131",
+  "description": "Connect Codex to lihi through one OAuth MCP registration for account status, group and domain switching, and automatic URL shortening.",
+  "author": {
+    "name": "lihi",
+    "url": "https://lihi.io/"
+  },
+  "homepage": "https://lihi.io/",
+  "keywords": [
+    "lihi",
+    "mcp",
+    "oauth",
+    "account",
+    "quota",
+    "subscription",
+    "work-group",
+    "group-switching",
+    "domain-switching",
+    "short-url",
+    "copywriting",
+    "polishing",
+    "publishing"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "lihi",
+    "shortDescription": "Use lihi account and short URL tools",
+    "longDescription": "Connects once to the lihi OAuth MCP server for account status, group and domain switching, and automatic URL shortening while revising or preparing human-facing content.",
+    "developerName": "lihi",
+    "category": "Productivity",
+    "capabilities": [
+      "Interactive",
+      "Write"
+    ],
+    "websiteURL": "https://lihi.io/",
+    "privacyPolicyURL": "https://knowledge.lihi.io/privacy-policy/",
+    "termsOfServiceURL": "https://knowledge.lihi.io/terms/",
+    "defaultPrompt": [
+      "Show my lihi account information",
+      "View or switch my lihi work group or short URL domain",
+      "Polish copy and automatically shorten detected new URLs"
+    ]
+  },
+  "mcpServers": "./.mcp.json"
+}

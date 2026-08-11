@@ -1,0 +1,11 @@
+interface:
+  display_name: "lihi-shorten"
+  short_description: "Polish copy and automatically shorten new URLs"
+  default_prompt: "Use $lihi-shorten to polish human-facing copy, automatically shorten detected new URLs, and show the current updated content."
+dependencies:
+  tools:
+    - type: "mcp"
+      value: "lihi"
+      description: "lihi short URL service"
+      transport: "streamable_http"
+      url: "https://app.lihi.com/mcp/v1/tools"

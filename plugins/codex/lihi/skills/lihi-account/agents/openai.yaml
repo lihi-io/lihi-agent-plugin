@@ -1,0 +1,11 @@
+interface:
+  display_name: "lihi-account"
+  short_description: "View lihi status, current group, and domain"
+  default_prompt: "Use $lihi-account to show my current lihi account information."
+dependencies:
+  tools:
+    - type: "mcp"
+      value: "lihi"
+      description: "lihi account information service"
+      transport: "streamable_http"
+      url: "https://app.lihi.com/mcp/v1/tools"
