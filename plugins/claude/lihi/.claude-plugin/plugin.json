@@ -1,7 +1,7 @@
 {
   "name": "lihi",
   "displayName": "lihi",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Connect Claude Code to lihi through one OAuth MCP registration for account status, group and domain switching, and automatic URL shortening.",
   "author": {
     "name": "lihi",

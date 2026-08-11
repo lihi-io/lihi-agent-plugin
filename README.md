@@ -19,7 +19,7 @@ Use lihi account status, group and short URL domain switching, and URL shortenin
 The production Streamable HTTP endpoint is:
 
 ```text
-https://app.lihi.com/mcp/v1/tools
+https://app.lihi.io/mcp/v1/tools
 ```
 
 ## Install

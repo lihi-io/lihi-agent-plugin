@@ -1,12 +1,12 @@
 # lihi MCP client contract
 
-This document defines the 0.3.0 agent-side contract for the production Streamable HTTP endpoint:
+This document defines the 0.3.1 agent-side contract for the production Streamable HTTP endpoint:
 
 ```text
-https://app.lihi.com/mcp/v1/tools
+https://app.lihi.io/mcp/v1/tools
 ```
 
-Codex and Claude Code own transport and OAuth. Each plugin registers one MCP server and exposes the same six tools through four skills. `tools/list` advertises `_meta["lihi/plugin"].minVersion` as `0.3.0`.
+Codex and Claude Code own transport and OAuth. Each plugin registers one MCP server and exposes the same six tools through four skills. `tools/list` advertises `_meta["lihi/plugin"].minVersion` as `0.3.1`.
 
 Requests containing an `Origin` header are not rejected solely for that header. This contract does not claim complete browser or CORS support.
 

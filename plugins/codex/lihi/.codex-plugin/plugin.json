@@ -1,6 +1,6 @@
 {
   "name": "lihi",
-  "version": "0.3.0+codex.20260810060131",
+  "version": "0.3.1+codex.20260811145402",
   "description": "Connect Codex to lihi through one OAuth MCP registration for account status, group and domain switching, and automatic URL shortening.",
   "author": {
     "name": "lihi",
