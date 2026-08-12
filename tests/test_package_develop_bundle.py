@@ -201,6 +201,9 @@ class DevelopPackagerTests(unittest.TestCase):
             self.assertIn("codex plugin marketplace add .", content)
             self.assertIn("claude plugin marketplace add .", content)
             self.assertIn(DEVELOP_ENDPOINT, content)
+        self.assertFalse(
+            (self.package / "docs/openai-platform-packaging.md").exists()
+        )
 
     def test_packager_excludes_caches_and_preserves_detector_mode(self):
         self.assertFalse(any("__pycache__" in path.parts for path in self.package.rglob("*")))

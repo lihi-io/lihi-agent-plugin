@@ -133,7 +133,13 @@ DEVELOP_RUNTIME_ENDPOINT_FILES = (
 )
 
 TEXT_SUFFIXES = {".json", ".md", ".yaml", ".yml"}
-PACKAGE_IGNORE = shutil.ignore_patterns("__pycache__", "*.pyc", "*.pyo", ".DS_Store")
+PACKAGE_IGNORE = shutil.ignore_patterns(
+    "__pycache__",
+    "*.pyc",
+    "*.pyo",
+    ".DS_Store",
+    "openai-platform-packaging.md",
+)
 SEMVER_PATTERN = re.compile(
     r"^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)"
     r"(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$"
