@@ -24,21 +24,21 @@ https://app.lihi.io/mcp/v1/tools
 
 ## 安裝
 
-正式環境市集來源為 [weedgood/lihi-agent-plugin.git](https://github.com/weedgood/lihi-agent-plugin.git)。外掛選擇器為 `lihi@lihi`，顯示名稱為 `lihi`。
+正式環境市集來源為 [lihi-io/lihi-agent-plugin.git](https://github.com/lihi-io/lihi-agent-plugin.git)。外掛選擇器為 `lihi@lihi`，顯示名稱為 `lihi`。
 
 ### 直接從 GitHub 安裝
 
 #### Codex
 
 ```bash
-codex plugin marketplace add https://github.com/weedgood/lihi-agent-plugin.git
+codex plugin marketplace add https://github.com/lihi-io/lihi-agent-plugin.git
 codex plugin add lihi@lihi
 ```
 
 #### Claude Code
 
 ```bash
-claude plugin marketplace add https://github.com/weedgood/lihi-agent-plugin.git
+claude plugin marketplace add https://github.com/lihi-io/lihi-agent-plugin.git
 claude plugin install lihi@lihi
 ```
 

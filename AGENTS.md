@@ -102,15 +102,29 @@ AccountStatus requires `group_name:string|null`, `domain:string|null`, `short_ur
 - Requests containing `Origin` are no longer rejected solely because of that header. Do not infer complete browser or CORS support from this fact.
 - If compaction removes state required for a safe next operation, fail closed and recover the exact state before mutation or release.
 
-## Develop packaging and versioning
+## Release packaging and versioning
 
-CI runs Python 3.8 unit tests, confirms parity files, builds a develop bundle, and uploads it for 14 days. The packager:
+CI runs Python 3.8 unit tests and parity checks. Develop-branch CI builds a
+develop marketplace for 14-day retention. SemVer tag CI builds four public
+OpenAI skill ZIPs plus one production marketplace bundle for 90-day retention.
+
+The develop packager:
 
 - derives a shared `major.minor.patch` core from both host manifests;
 - rewrites copied identities, endpoints, four skill folders, manifests, marketplaces, and Codex metadata only inside staging;
 - emits `DEVELOP_BUILD.json`, where authoritative `skill_names` contains all four develop skills;
 - retains singular `skill_name` at root and `plugins[0]` as a deprecated alias equal to `skill_names[0]` for 0.3 compatibility;
 - excludes caches and preserves source runtime files unchanged.
+
+The production marketplace packager copies the checked-in production
+marketplaces, both host plugins, and public installation guides without
+rewriting identities or endpoints. It emits `lihi-agent-<major.minor.patch>`
+and fails rather than overwriting an existing output directory.
+
+The OpenAI Platform packager emits exactly four individual skill ZIPs. Each
+archive has one same-named top-level skill directory. It does not accept an app
+ID and does not emit a complete plugin ZIP, marketplace, manifest, MCP config,
+app config, or shared asset.
 
 Both manifests must share core version `0.3.1`. Codex may add one cachebuster suffix. When modifying the Codex bundle, run the plugin-creator cachebuster helper last and validate the plugin. Reinstall only when explicitly requested; after reinstall, test from a new conversation.
 
@@ -127,4 +141,9 @@ cmp plugins/codex/lihi/skills/lihi-shorten/references/shortening-workflow.md plu
 git diff --check
 ```
 
-For packaging changes, also build locally with `scripts/package_develop_bundle.py` and validate all eight skills, both host plugins, production/develop identity isolation, endpoint isolation, metadata aliases, and absence of removed tool fields and stale policies.
+For packaging changes, also build locally with
+`scripts/package_develop_bundle.py`, `scripts/package_production_bundle.py`,
+and `scripts/package_openai_platform_bundle.py`. Validate all host plugins,
+production/develop identity isolation, endpoint isolation, metadata aliases,
+the four skill-only OpenAI archives, and absence of removed tool fields and
+stale policies.

@@ -1,56 +1,32 @@
 #!/usr/bin/env python3
-"""Build public lihi OpenAI Platform plugin and skill ZIPs without changing sources."""
+"""Build public lihi OpenAI Platform skill ZIPs without changing sources."""
 
 from __future__ import annotations
 
 import argparse
-import binascii
-import copy
 import hashlib
 import json
 import os
 import re
 import shutil
 import stat
-import struct
 import sys
 import tempfile
 import unicodedata
 import zipfile
-import zlib
 from pathlib import Path, PurePosixPath
 from typing import Dict, Mapping, Sequence, Set, Tuple
-from urllib.parse import urlsplit
 
 
 PLUGIN_NAME = "lihi"
 PRODUCTION_ENDPOINT = "https://app.lihi.io/mcp/v1/tools"
 DEVELOP_ORIGIN = "https://app.lihidev.com"
-DEVELOPER_MARKETPLACE_NAME = "lihi-openai-developer"
-DEVELOPER_MARKETPLACE_DISPLAY_NAME = "lihi OpenAI Developer"
-DEVELOPER_BUNDLE_PREFIX = "lihi-openai-developer-"
-PLATFORM_BUNDLE_PREFIX = "lihi-openai-platform-"
 
 CODEX_PLUGIN_ROOT = Path("plugins/codex/lihi")
 CODEX_MANIFEST = CODEX_PLUGIN_ROOT / ".codex-plugin/plugin.json"
 CLAUDE_MANIFEST = Path("plugins/claude/lihi/.claude-plugin/plugin.json")
 SOURCE_MANIFESTS = (CODEX_MANIFEST, CLAUDE_MANIFEST)
 SOURCE_SKILLS_ROOT = CODEX_PLUGIN_ROOT / "skills"
-
-PLATFORM_ROOT = Path("packaging/openai-platform")
-PLATFORM_ASSETS_ROOT = PLATFORM_ROOT / "assets"
-LOGO_SOURCE = PLATFORM_ASSETS_ROOT / "logo.png"
-COMPOSER_ICON_SOURCE = PLATFORM_ASSETS_ROOT / "composer-icon.png"
-LOGO_DIMENSION = 256
-COMPOSER_ICON_DIMENSION = 48
-SOURCE_ASSET_DIMENSIONS = {
-    LOGO_SOURCE: LOGO_DIMENSION,
-    COMPOSER_ICON_SOURCE: COMPOSER_ICON_DIMENSION,
-}
-PACKAGE_ASSET_DIMENSIONS = {
-    Path("assets/logo.png"): LOGO_DIMENSION,
-    Path("assets/composer-icon.png"): COMPOSER_ICON_DIMENSION,
-}
 
 PROMOTIONAL_URLS = (
     "https://knowledge.lihi.io/pricing",
@@ -241,34 +217,6 @@ HOST_NEUTRAL_REWRITES = {
     ),
 }
 
-PUBLIC_DESCRIPTION = (
-    "Connect to lihi through one OAuth MCP integration for account status, "
-    "group and domain switching, and automatic URL shortening."
-)
-PUBLIC_INTERFACE = {
-    "displayName": "lihi",
-    "shortDescription": "lihi account and short URLs",
-    "longDescription": (
-        "Connects once to the lihi OAuth MCP server for account status, group "
-        "and domain switching, and automatic URL shortening while revising "
-        "or preparing human-facing content."
-    ),
-    "developerName": "lihi",
-    "category": "Productivity",
-    "capabilities": ["Interactive", "Write"],
-    "websiteURL": "https://lihi.io/",
-    "supportURL": "https://lihistatus.com/contact",
-    "privacyPolicyURL": "https://knowledge.lihi.io/privacy-policy/",
-    "termsOfServiceURL": "https://knowledge.lihi.io/terms-of-use/",
-    "defaultPrompt": [
-        "Show my lihi account information",
-        "View or switch my lihi work group or short URL domain",
-        "Polish copy and automatically shorten detected new URLs",
-    ],
-    "logo": "./assets/logo.png",
-    "composerIcon": "./assets/composer-icon.png",
-}
-
 SEMVER_PATTERN = re.compile(
     r"^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)"
     r"(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$"
@@ -280,28 +228,6 @@ BRAND_PATTERN = re.compile(
 )
 DRIVE_PREFIX_PATTERN = re.compile(r"^[A-Za-z]:")
 HOST_SPECIFIC_PATTERN = re.compile(r"\b(?:Codex|Claude)\b", re.IGNORECASE)
-DEVELOPER_APP_ID_PATTERN = re.compile(
-    r"^plugin_asdk_app_[A-Za-z0-9][A-Za-z0-9_-]*$"
-)
-
-PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
-PNG_SAMPLES_PER_PIXEL = {0: 1, 2: 3, 3: 1, 4: 2, 6: 4}
-PNG_BIT_DEPTHS = {
-    0: {1, 2, 4, 8, 16},
-    2: {8, 16},
-    3: {1, 2, 4, 8},
-    4: {8, 16},
-    6: {8, 16},
-}
-ADAM7_PASSES = (
-    (0, 0, 8, 8),
-    (4, 0, 8, 8),
-    (0, 4, 4, 8),
-    (2, 0, 4, 4),
-    (0, 2, 2, 4),
-    (1, 0, 2, 2),
-    (0, 1, 1, 2),
-)
 
 MAX_ARCHIVE_SIZE = 100 * 1000 * 1000
 MAX_ARCHIVE_ENTRIES = 5000
@@ -309,26 +235,7 @@ MAX_ARCHIVE_UNCOMPRESSED_SIZE = 512 * 1024 * 1024
 MAX_ARCHIVE_MEMBER_SIZE = 100 * 1024 * 1024
 MAX_ARCHIVE_PATH_SEGMENTS = 20
 MAX_ARCHIVE_PATH_BYTES = 1024
-MAX_IMAGE_SIZE = 5 * 1024 * 1024
-MIN_IMAGE_DIMENSION = 48
-MAX_IMAGE_DIMENSION = 4096
 ZIP_TIMESTAMP = (1980, 1, 1, 0, 0, 0)
-
-CATEGORY_VALUES = {
-    "Productivity",
-    "Creativity",
-    "Developer Tools",
-    "Business & Operations",
-    "Data & Analytics",
-    "Communication",
-    "Education & Research",
-    "Security",
-    "Finance",
-    "Healthcare",
-    "Travel",
-    "Entertainment",
-    "Other",
-}
 
 
 class PackagingError(RuntimeError):
@@ -343,16 +250,6 @@ def read_json(path: Path) -> dict:
     if not isinstance(value, dict):
         raise PackagingError("Expected a JSON object in {0}".format(path))
     return value
-
-
-def write_json(path: Path, value: Mapping[str, object]) -> None:
-    try:
-        path.write_text(
-            json.dumps(value, ensure_ascii=False, indent=2) + "\n",
-            encoding="utf-8",
-        )
-    except OSError as exc:
-        raise PackagingError("Cannot write JSON file {0}: {1}".format(path, exc))
 
 
 def semantic_version_core(version: object, manifest: Path) -> str:
@@ -417,14 +314,8 @@ def expected_source_skill_files(skill_name: str) -> Set[Path]:
     return set(SKILL_FILES[skill_name])
 
 
-def expected_package_files(include_app: bool = False) -> Set[str]:
-    names = {
-        ".codex-plugin/plugin.json",
-        "assets/logo.png",
-        "assets/composer-icon.png",
-    }
-    if include_app:
-        names.add(".app.json")
+def expected_staged_skill_files() -> Set[str]:
+    names = set()
     for skill_name in SKILLS:
         for relative_path in SKILL_FILES[skill_name]:
             names.add(
@@ -443,21 +334,10 @@ def expected_skill_archive_files(skill_name: str) -> Set[str]:
 
 
 def public_artifact_filenames(version: str) -> Dict[str, str]:
-    names = {
-        "plugin": "{0}{1}.zip".format(PLATFORM_BUNDLE_PREFIX, version),
+    return {
+        skill_name: "{0}-{1}.zip".format(skill_name, version)
+        for skill_name in SKILLS
     }
-    for skill_name in SKILLS:
-        names[skill_name] = "{0}-{1}.zip".format(skill_name, version)
-    return names
-
-
-def expected_developer_bundle_files() -> Set[str]:
-    names = {".agents/plugins/marketplace.json"}
-    names.update(
-        "plugins/{0}/{1}".format(PLUGIN_NAME, name)
-        for name in expected_package_files(include_app=True)
-    )
-    return names
 
 
 def validate_source_bundle(repo_root: Path) -> str:
@@ -675,210 +555,6 @@ def apply_host_neutral_rewrites(staging_root: Path) -> None:
             )
 
 
-def build_public_manifest(repo_root: Path, version: str) -> dict:
-    source = read_json(repo_root / CODEX_MANIFEST)
-    author = source.get("author")
-    keywords = source.get("keywords")
-    if not isinstance(author, dict) or author.get("name") != "lihi":
-        raise PackagingError("Codex source manifest has invalid lihi author metadata")
-    if not isinstance(keywords, list) or any(
-        not isinstance(item, str) or not item for item in keywords
-    ):
-        raise PackagingError("Codex source manifest has invalid keywords")
-    return {
-        "name": PLUGIN_NAME,
-        "version": version,
-        "description": PUBLIC_DESCRIPTION,
-        "author": copy.deepcopy(author),
-        "homepage": "https://lihi.io/",
-        "keywords": list(keywords),
-        "skills": "./skills/",
-        "interface": copy.deepcopy(PUBLIC_INTERFACE),
-    }
-
-
-def validate_developer_app_id(app_id: object) -> str:
-    if (
-        not isinstance(app_id, str)
-        or len(app_id) > 256
-        or DEVELOPER_APP_ID_PATTERN.fullmatch(app_id) is None
-    ):
-        raise PackagingError(
-            "app-id must start with plugin_asdk_app_ and contain only letters, "
-            "digits, underscores, or hyphens"
-        )
-    return app_id
-
-
-def build_developer_app_manifest(app_id: str) -> dict:
-    return {
-        "apps": {
-            PLUGIN_NAME: {
-                "id": validate_developer_app_id(app_id),
-            }
-        }
-    }
-
-
-def build_developer_marketplace() -> dict:
-    return {
-        "name": DEVELOPER_MARKETPLACE_NAME,
-        "interface": {
-            "displayName": DEVELOPER_MARKETPLACE_DISPLAY_NAME,
-        },
-        "plugins": [
-            {
-                "name": PLUGIN_NAME,
-                "source": {
-                    "source": "local",
-                    "path": "./plugins/{0}".format(PLUGIN_NAME),
-                },
-                "policy": {
-                    "installation": "AVAILABLE",
-                    "authentication": "ON_INSTALL",
-                },
-                "category": "Productivity",
-            }
-        ],
-    }
-
-
-def expected_png_data_size(
-    width: int,
-    height: int,
-    color_type: int,
-    bit_depth: int,
-    interlace: int,
-) -> int:
-    bits_per_pixel = PNG_SAMPLES_PER_PIXEL[color_type] * bit_depth
-
-    def pass_size(pass_width: int, pass_height: int) -> int:
-        if pass_width <= 0 or pass_height <= 0:
-            return 0
-        row_bytes = (pass_width * bits_per_pixel + 7) // 8
-        return pass_height * (row_bytes + 1)
-
-    if interlace == 0:
-        return pass_size(width, height)
-
-    total = 0
-    for x_start, y_start, x_step, y_step in ADAM7_PASSES:
-        pass_width = (
-            (width - x_start + x_step - 1) // x_step
-            if width > x_start
-            else 0
-        )
-        pass_height = (
-            (height - y_start + y_step - 1) // y_step
-            if height > y_start
-            else 0
-        )
-        total += pass_size(pass_width, pass_height)
-    return total
-
-
-def validate_png(path: Path) -> Tuple[int, int]:
-    if path.is_symlink() or not path.is_file():
-        raise PackagingError("Required PNG asset is missing: {0}".format(path))
-    try:
-        size = path.stat().st_size
-        data = path.read_bytes()
-    except OSError as exc:
-        raise PackagingError("Cannot read PNG asset {0}: {1}".format(path, exc))
-    if size > MAX_IMAGE_SIZE:
-        raise PackagingError("PNG asset exceeds 5 MiB: {0}".format(path))
-    if not data.startswith(PNG_SIGNATURE):
-        raise PackagingError("PNG signature is invalid: {0}".format(path))
-
-    offset = len(PNG_SIGNATURE)
-    ihdr = None
-    idat_parts = []
-    seen_idat = False
-    idat_ended = False
-    seen_iend = False
-    chunk_index = 0
-    while offset < len(data):
-        if len(data) - offset < 12:
-            raise PackagingError("PNG chunk is truncated: {0}".format(path))
-        length = struct.unpack(">I", data[offset : offset + 4])[0]
-        chunk_type = data[offset + 4 : offset + 8]
-        chunk_end = offset + 12 + length
-        if chunk_end > len(data):
-            raise PackagingError("PNG chunk is truncated: {0}".format(path))
-        chunk_data = data[offset + 8 : offset + 8 + length]
-        expected_crc = struct.unpack(">I", data[offset + 8 + length : chunk_end])[0]
-        actual_crc = binascii.crc32(chunk_type + chunk_data) & 0xFFFFFFFF
-        if actual_crc != expected_crc:
-            raise PackagingError("PNG chunk CRC is invalid: {0}".format(path))
-        if not re.fullmatch(rb"[A-Za-z]{4}", chunk_type):
-            raise PackagingError("PNG chunk type is invalid: {0}".format(path))
-
-        if chunk_index == 0 and chunk_type != b"IHDR":
-            raise PackagingError("PNG IHDR must be the first chunk: {0}".format(path))
-        if chunk_type == b"IHDR":
-            if ihdr is not None or length != 13:
-                raise PackagingError("PNG IHDR is invalid: {0}".format(path))
-            ihdr = struct.unpack(">IIBBBBB", chunk_data)
-        elif chunk_type == b"IDAT":
-            if ihdr is None or idat_ended:
-                raise PackagingError("PNG IDAT sequence is invalid: {0}".format(path))
-            seen_idat = True
-            idat_parts.append(chunk_data)
-        else:
-            if seen_idat and chunk_type != b"IEND":
-                idat_ended = True
-        if chunk_type == b"IEND":
-            if length != 0 or seen_iend:
-                raise PackagingError("PNG IEND is invalid: {0}".format(path))
-            seen_iend = True
-            offset = chunk_end
-            if offset != len(data):
-                raise PackagingError("PNG has data after IEND: {0}".format(path))
-            break
-        offset = chunk_end
-        chunk_index += 1
-
-    if ihdr is None or not seen_idat or not seen_iend:
-        raise PackagingError("PNG is missing required chunks: {0}".format(path))
-    width, height, bit_depth, color_type, compression, filtering, interlace = ihdr
-    if color_type not in PNG_BIT_DEPTHS or bit_depth not in PNG_BIT_DEPTHS[color_type]:
-        raise PackagingError("PNG color type or bit depth is invalid: {0}".format(path))
-    if compression != 0 or filtering != 0 or interlace not in {0, 1}:
-        raise PackagingError("PNG encoding method is unsupported: {0}".format(path))
-    if width != height:
-        raise PackagingError("PNG asset must be square: {0}".format(path))
-    if width < MIN_IMAGE_DIMENSION or width > MAX_IMAGE_DIMENSION:
-        raise PackagingError(
-            "PNG dimensions must be between 48 and 4096 pixels: {0}".format(path)
-        )
-
-    expected_size = expected_png_data_size(
-        width, height, color_type, bit_depth, interlace
-    )
-    compressed = b"".join(idat_parts)
-    try:
-        decoder = zlib.decompressobj()
-        decoded = decoder.decompress(compressed, expected_size + 1)
-        if decoder.unconsumed_tail or len(decoded) > expected_size:
-            raise PackagingError("PNG decoded data is too large: {0}".format(path))
-        decoded += decoder.flush()
-    except zlib.error as exc:
-        raise PackagingError("PNG image data cannot be decoded: {0}: {1}".format(path, exc))
-    if not decoder.eof or decoder.unused_data or len(decoded) != expected_size:
-        raise PackagingError("PNG decoded data size is invalid: {0}".format(path))
-    return width, height
-
-
-def validate_png_dimension(path: Path, expected_dimension: int) -> None:
-    width, height = validate_png(path)
-    if (width, height) != (expected_dimension, expected_dimension):
-        raise PackagingError(
-            "PNG asset must be exactly {0}x{0} pixels: {1}".format(
-                expected_dimension, path
-            )
-        )
-
-
 def parse_skill_frontmatter(content: str, path: Path) -> Dict[str, str]:
     lines = content.splitlines()
     if not lines or lines[0] != "---":
@@ -919,38 +595,6 @@ def has_unsupported_control(value: str, allow_newline: bool = False) -> bool:
     return False
 
 
-def require_text(
-    value: object,
-    field: str,
-    maximum: int,
-    one_line: bool = True,
-) -> str:
-    if not isinstance(value, str) or not value.strip():
-        raise PackagingError("{0} must be a non-empty string".format(field))
-    if len(value) > maximum:
-        raise PackagingError("{0} exceeds {1} characters".format(field, maximum))
-    if one_line and ("\n" in value or "\r" in value):
-        raise PackagingError("{0} must fit on one line".format(field))
-    if has_unsupported_control(value, allow_newline=not one_line):
-        raise PackagingError("{0} contains unsupported characters".format(field))
-    return value
-
-
-def validate_https_url(value: object, field: str) -> None:
-    url = require_text(value, field, 1024)
-    try:
-        parsed = urlsplit(url)
-        hostname = parsed.hostname
-        username = parsed.username
-        password = parsed.password
-    except ValueError as exc:
-        raise PackagingError("{0} is not a valid HTTPS URL: {1}".format(field, exc))
-    if parsed.scheme != "https" or not parsed.netloc or not hostname:
-        raise PackagingError("{0} must be an absolute HTTPS URL".format(field))
-    if username is not None or password is not None:
-        raise PackagingError("{0} must not contain credentials".format(field))
-
-
 def validate_brand_casing(content: str, path: Path) -> None:
     for match in BRAND_PATTERN.finditer(content):
         if match.group(0) != "lihi":
@@ -959,133 +603,15 @@ def validate_brand_casing(content: str, path: Path) -> None:
             )
 
 
-def validate_developer_app_manifest(path: Path, app_id: str) -> None:
-    payload = read_json(path)
-    expected = build_developer_app_manifest(app_id)
-    if payload != expected:
-        raise PackagingError(
-            "Developer .app.json must contain exactly one lihi app mapping"
-        )
-
-
-def validate_manifest(
-    manifest: dict,
-    staging_root: Path,
-    app_id: str = None,
-) -> None:
-    if manifest.get("name") != PLUGIN_NAME:
-        raise PackagingError("Public manifest name must be lihi")
-    manifest_path = staging_root / ".codex-plugin/plugin.json"
-    version = manifest.get("version")
-    core_version = semantic_version_core(version, manifest_path)
-    if app_id is None:
-        if version != core_version:
-            raise PackagingError(
-                "Public manifest version must be major.minor.patch only"
-            )
-    elif not version.startswith(core_version + "+codex.dev."):
-        raise PackagingError(
-            "Developer manifest version must use a Codex cachebuster"
-        )
-    require_text(manifest.get("description"), "description", 4000, one_line=False)
-    if manifest.get("skills") != "./skills/":
-        raise PackagingError("Public manifest skills must be ./skills/")
-    for excluded in ("mcpServers", "hooks"):
-        if excluded in manifest:
-            raise PackagingError("OpenAI manifest must not contain {0}".format(excluded))
-    if app_id is None:
-        if "apps" in manifest:
-            raise PackagingError("Public manifest must not contain apps")
-    else:
-        validate_developer_app_id(app_id)
-        if manifest.get("apps") != "./.app.json":
-            raise PackagingError("Developer manifest apps must be ./.app.json")
-        validate_developer_app_manifest(staging_root / ".app.json", app_id)
-
-    author = manifest.get("author")
-    if not isinstance(author, dict):
-        raise PackagingError("Public manifest author must be an object")
-    author_name = require_text(author.get("name"), "author.name", 120)
-    validate_https_url(author.get("url"), "author.url")
-    validate_https_url(manifest.get("homepage"), "homepage")
-
-    interface = manifest.get("interface")
-    if not isinstance(interface, dict):
-        raise PackagingError("Public manifest interface must be an object")
-    display_name = require_text(interface.get("displayName"), "displayName", 30)
-    require_text(interface.get("shortDescription"), "shortDescription", 30)
-    require_text(interface.get("longDescription"), "longDescription", 4000, one_line=False)
-    developer_name = require_text(interface.get("developerName"), "developerName", 80)
-    if author_name != developer_name:
-        raise PackagingError("author.name and developerName must match")
-    if display_name != "lihi":
-        raise PackagingError("Public displayName must be lihi")
-    category = interface.get("category")
-    if category not in CATEGORY_VALUES:
-        raise PackagingError("Public manifest category is unsupported")
-
-    capabilities = interface.get("capabilities")
-    if not isinstance(capabilities, list) or len(capabilities) > 20:
-        raise PackagingError("Public capabilities must be a list of at most 20 strings")
-    for index, capability in enumerate(capabilities):
-        require_text(capability, "capabilities[{0}]".format(index), 120)
-
-    prompts = interface.get("defaultPrompt")
-    if not isinstance(prompts, list) or not prompts or len(prompts) > 3:
-        raise PackagingError("Public defaultPrompt must contain one to three prompts")
-    normalized_prompts = set()
-    for index, prompt in enumerate(prompts):
-        value = require_text(prompt, "defaultPrompt[{0}]".format(index), 128)
-        if "@" in value:
-            raise PackagingError("Public defaultPrompt must not contain @mentions")
-        normalized = " ".join(unicodedata.normalize("NFKC", value).split())
-        if normalized in normalized_prompts:
-            raise PackagingError("Public defaultPrompt entries must be unique")
-        normalized_prompts.add(normalized)
-
-    link_fields = [
-        "websiteURL",
-        "privacyPolicyURL",
-        "termsOfServiceURL",
-    ]
-    if app_id is None:
-        link_fields.append("supportURL")
-    elif "supportURL" in interface:
-        raise PackagingError(
-            "Developer manifest must omit unsupported interface.supportURL"
-        )
-    for field in link_fields:
-        validate_https_url(interface.get(field), field)
-    if interface.get("logo") != "./assets/logo.png":
-        raise PackagingError("Public logo must be ./assets/logo.png")
-    if interface.get("composerIcon") != "./assets/composer-icon.png":
-        raise PackagingError(
-            "Public composerIcon must be ./assets/composer-icon.png"
-        )
-    if "screenshots" in interface:
-        raise PackagingError("Public package must not contain screenshots")
-
-    for relative_path, dimension in PACKAGE_ASSET_DIMENSIONS.items():
-        validate_png_dimension(staging_root / relative_path, dimension)
-
-
-def validate_staging(
-    repo_root: Path,
-    staging_root: Path,
-    app_id: str = None,
-) -> None:
+def validate_staging(repo_root: Path, staging_root: Path) -> None:
     actual_files = {path.as_posix() for path in regular_files(staging_root)}
-    expected_files = expected_package_files(include_app=app_id is not None)
+    expected_files = expected_staged_skill_files()
     if actual_files != expected_files:
         raise PackagingError(
-            "Staged package files differ from the allowlist: expected {0!r}, got {1!r}".format(
+            "Staged skill files differ from the allowlist: expected {0!r}, got {1!r}".format(
                 tuple(sorted(expected_files)), tuple(sorted(actual_files))
             )
         )
-
-    manifest_path = staging_root / ".codex-plugin/plugin.json"
-    manifest = read_json(manifest_path)
-    validate_manifest(manifest, staging_root, app_id=app_id)
 
     identities = set()
     for skill_name in SKILLS:
@@ -1112,6 +638,7 @@ def validate_staging(
 
     detector_source = repo_root / SOURCE_SKILLS_ROOT / "lihi-shorten/scripts/detect_urls.py"
     detector_staged = staging_root / "skills/lihi-shorten/scripts/detect_urls.py"
+    read_utf8(detector_staged)
     if detector_source.read_bytes() != detector_staged.read_bytes():
         raise PackagingError("Packaged detector must be byte-identical to production")
     if not detector_staged.stat().st_mode & 0o111:
@@ -1131,20 +658,9 @@ def validate_staging(
                         path, promotional_url
                     )
                 )
-        host_neutral_content = content
-        if app_id is not None and path == staging_root / ".codex-plugin/plugin.json":
-            manifest_for_scan = read_json(path)
-            manifest_for_scan["version"] = semantic_version_core(
-                manifest_for_scan.get("version"), path
-            )
-            host_neutral_content = json.dumps(
-                manifest_for_scan,
-                ensure_ascii=False,
-                sort_keys=True,
-            )
-        if HOST_SPECIFIC_PATTERN.search(host_neutral_content):
+        if HOST_SPECIFIC_PATTERN.search(content):
             raise PackagingError("Host-specific wording found in OpenAI package: {0}".format(path))
-        lowered = host_neutral_content.lower()
+        lowered = content.lower()
         if "codex mcp login" in lowered or "mcp settings" in lowered or "open `/mcp`" in lowered:
             raise PackagingError("Host-specific OAuth action found in OpenAI package: {0}".format(path))
 
@@ -1152,8 +668,6 @@ def validate_staging(
 def prepare_staging(
     repo_root: Path,
     staging_root: Path,
-    version: str,
-    app_id: str = None,
 ) -> None:
     for skill_name in SKILLS:
         for relative_path in SKILL_FILES[skill_name]:
@@ -1169,25 +683,6 @@ def prepare_staging(
             )
 
     apply_host_neutral_rewrites(staging_root)
-
-    copy_regular_file(repo_root / LOGO_SOURCE, staging_root / "assets/logo.png")
-    copy_regular_file(
-        repo_root / COMPOSER_ICON_SOURCE,
-        staging_root / "assets/composer-icon.png",
-    )
-
-    manifest_path = staging_root / ".codex-plugin/plugin.json"
-    manifest_path.parent.mkdir(parents=True, exist_ok=True)
-    manifest = build_public_manifest(repo_root, version)
-    if app_id is not None:
-        validate_developer_app_id(app_id)
-        manifest["apps"] = "./.app.json"
-        manifest["interface"].pop("supportURL", None)
-        app_manifest_path = staging_root / ".app.json"
-        write_json(app_manifest_path, build_developer_app_manifest(app_id))
-        app_manifest_path.chmod(0o644)
-    write_json(manifest_path, manifest)
-    manifest_path.chmod(0o644)
 
 
 def validate_archive_member_name(name: str) -> str:
@@ -1326,159 +821,6 @@ def sha256_file(path: Path) -> str:
     return digest.hexdigest()
 
 
-def sha256_directory(root: Path) -> str:
-    digest = hashlib.sha256()
-    for relative_path in sorted(regular_files(root)):
-        path = root / relative_path
-        name = relative_path.as_posix().encode("utf-8")
-        data = path.read_bytes()
-        mode = 0o755 if path.stat().st_mode & 0o111 else 0o644
-        digest.update(struct.pack(">I", len(name)))
-        digest.update(name)
-        digest.update(struct.pack(">I", mode))
-        digest.update(struct.pack(">Q", len(data)))
-        digest.update(data)
-    return digest.hexdigest()
-
-
-def validate_developer_bundle(
-    repo_root: Path,
-    bundle_root: Path,
-    app_id: str,
-    version: str,
-) -> None:
-    actual_files = {path.as_posix() for path in regular_files(bundle_root)}
-    expected_files = expected_developer_bundle_files()
-    if actual_files != expected_files:
-        raise PackagingError(
-            "Developer bundle files differ from the allowlist: expected "
-            "{0!r}, got {1!r}".format(
-                tuple(sorted(expected_files)), tuple(sorted(actual_files))
-            )
-        )
-
-    marketplace_path = bundle_root / ".agents/plugins/marketplace.json"
-    if read_json(marketplace_path) != build_developer_marketplace():
-        raise PackagingError("Developer marketplace metadata is invalid")
-
-    plugin_root = bundle_root / "plugins" / PLUGIN_NAME
-    validate_staging(repo_root, plugin_root, app_id=app_id)
-    manifest = read_json(plugin_root / ".codex-plugin/plugin.json")
-    if manifest.get("version") != version:
-        raise PackagingError("Developer manifest version is invalid")
-    if not version.startswith(release_version(repo_root) + "+codex.dev."):
-        raise PackagingError("Developer manifest must use a Codex cachebuster")
-
-
-def prepare_developer_bundle(
-    repo_root: Path,
-    bundle_root: Path,
-    base_version: str,
-    app_id: str,
-) -> str:
-    app_id = validate_developer_app_id(app_id)
-    plugin_root = bundle_root / "plugins" / PLUGIN_NAME
-    plugin_root.mkdir(parents=True)
-    prepare_staging(
-        repo_root,
-        plugin_root,
-        base_version,
-        app_id=app_id,
-    )
-
-    cachebuster = sha256_directory(plugin_root)[:12]
-    version = "{0}+codex.dev.{1}".format(base_version, cachebuster)
-    manifest_path = plugin_root / ".codex-plugin/plugin.json"
-    manifest = read_json(manifest_path)
-    manifest["version"] = version
-    write_json(manifest_path, manifest)
-    manifest_path.chmod(0o644)
-
-    marketplace_path = bundle_root / ".agents/plugins/marketplace.json"
-    marketplace_path.parent.mkdir(parents=True)
-    write_json(marketplace_path, build_developer_marketplace())
-    marketplace_path.chmod(0o644)
-
-    validate_developer_bundle(repo_root, bundle_root, app_id, version)
-    return version
-
-
-def publish_developer_directory(
-    staging_root: Path,
-    output_dir: Path,
-    version: str,
-) -> Tuple[Path, str]:
-    try:
-        output_dir.mkdir(parents=True, exist_ok=True)
-    except OSError as exc:
-        raise PackagingError(
-            "Cannot create output directory {0}: {1}".format(output_dir, exc)
-        )
-
-    target = output_dir / (DEVELOPER_BUNDLE_PREFIX + version)
-    staged_digest = sha256_directory(staging_root)
-    if target.exists() or target.is_symlink():
-        if target.is_symlink() or not target.is_dir():
-            raise PackagingError(
-                "Developer bundle output is not a regular directory: {0}".format(
-                    target
-                )
-            )
-        if sha256_directory(target) != staged_digest:
-            raise PackagingError(
-                "Developer bundle output already exists with different content: "
-                "{0}".format(target)
-            )
-        return target, staged_digest
-
-    try:
-        with tempfile.TemporaryDirectory(
-            prefix=".lihi-openai-developer-",
-            dir=str(output_dir),
-        ) as temporary:
-            candidate = Path(temporary) / "bundle"
-            shutil.copytree(str(staging_root), str(candidate))
-            if sha256_directory(candidate) != staged_digest:
-                raise PackagingError("Copied Developer bundle content changed")
-            os.replace(str(candidate), str(target))
-    except OSError as exc:
-        raise PackagingError(
-            "Cannot publish Developer bundle {0}: {1}".format(target, exc)
-        )
-    return target, staged_digest
-
-
-def build_developer_bundle(
-    repo_root: Path,
-    output_dir: Path,
-    app_id: str,
-) -> Tuple[Path, str, str]:
-    repo_root = repo_root.resolve()
-    output_dir = output_dir.resolve()
-    app_id = validate_developer_app_id(app_id)
-    base_version = validate_source_bundle(repo_root)
-    for relative_path, dimension in SOURCE_ASSET_DIMENSIONS.items():
-        validate_png_dimension(repo_root / relative_path, dimension)
-
-    with tempfile.TemporaryDirectory(
-        prefix="lihi-openai-developer-staging-"
-    ) as temporary:
-        staging_root = Path(temporary) / "marketplace"
-        staging_root.mkdir()
-        version = prepare_developer_bundle(
-            repo_root,
-            staging_root,
-            base_version,
-            app_id,
-        )
-        target, digest = publish_developer_directory(
-            staging_root,
-            output_dir,
-            version,
-        )
-    return target, version, digest
-
-
 def remove_public_backup_directory(
     backup_dir: Path,
     backups: Mapping[str, Path],
@@ -1502,7 +844,7 @@ def publish_public_zip_artifacts(
     temporary_zips: Mapping[str, Path],
     artifact_names: Mapping[str, str],
 ) -> None:
-    artifact_keys = ("plugin",) + SKILLS
+    artifact_keys = SKILLS
     if set(temporary_zips) != set(artifact_keys) or set(artifact_names) != set(
         artifact_keys
     ):
@@ -1596,19 +938,19 @@ def publish_public_zip_artifacts(
     remove_public_backup_directory(backup_dir, backups)
 
 
-def build_bundle(repo_root: Path, output_dir: Path) -> Tuple[Path, str, str]:
+def build_bundle(
+    repo_root: Path,
+    output_dir: Path,
+) -> Tuple[Dict[str, Path], str, Dict[str, str]]:
     repo_root = repo_root.resolve()
     output_dir = output_dir.resolve()
     version = validate_source_bundle(repo_root)
 
-    for relative_path, dimension in SOURCE_ASSET_DIMENSIONS.items():
-        validate_png_dimension(repo_root / relative_path, dimension)
-
     with tempfile.TemporaryDirectory(prefix="lihi-openai-platform-") as temporary:
         temporary_root = Path(temporary)
-        staging_root = temporary_root / "plugin"
+        staging_root = temporary_root / "skills-staging"
         staging_root.mkdir(parents=True)
-        prepare_staging(repo_root, staging_root, version)
+        prepare_staging(repo_root, staging_root)
         validate_staging(repo_root, staging_root)
 
         skill_staging_roots = {}
@@ -1643,18 +985,13 @@ def build_bundle(repo_root: Path, output_dir: Path) -> Tuple[Path, str, str]:
         except OSError as exc:
             raise PackagingError("Cannot create output directory {0}: {1}".format(output_dir, exc))
         artifact_names = public_artifact_filenames(version)
-        staging_roots = {"plugin": staging_root}
-        staging_roots.update(skill_staging_roots)
-        expected_names_by_artifact = {"plugin": expected_package_files()}
-        expected_names_by_artifact.update(
-            {
-                skill_name: expected_skill_archive_files(skill_name)
-                for skill_name in SKILLS
-            }
-        )
+        expected_names_by_artifact = {
+            skill_name: expected_skill_archive_files(skill_name)
+            for skill_name in SKILLS
+        }
         temporary_zips = {}
         try:
-            for artifact_key in ("plugin",) + SKILLS:
+            for artifact_key in SKILLS:
                 with tempfile.NamedTemporaryFile(
                     prefix=".{0}-".format(artifact_key),
                     suffix=".tmp",
@@ -1664,7 +1001,7 @@ def build_bundle(repo_root: Path, output_dir: Path) -> Tuple[Path, str, str]:
                     temporary_zip = Path(stream.name)
                 temporary_zips[artifact_key] = temporary_zip
                 write_deterministic_zip(
-                    staging_roots[artifact_key],
+                    skill_staging_roots[artifact_key],
                     temporary_zip,
                 )
                 validate_archive(
@@ -1695,31 +1032,26 @@ def build_bundle(repo_root: Path, output_dir: Path) -> Tuple[Path, str, str]:
                         )
                     )
 
-    target = output_dir / artifact_names["plugin"]
-    digest = sha256_file(target)
-    return target, version, digest
+    targets = {
+        skill_name: output_dir / artifact_names[skill_name]
+        for skill_name in SKILLS
+    }
+    digests = {
+        skill_name: sha256_file(target)
+        for skill_name, target in targets.items()
+    }
+    return targets, version, digests
 
 
 def parse_args(argv: Sequence[str] = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description=(
-            "Build the public lihi OpenAI Platform plugin and skill ZIPs, or a Developer mode "
-            "marketplace bundle when --app-id is provided."
-        )
+        description="Build the four public lihi OpenAI Platform skill ZIPs."
     )
     parser.add_argument(
         "--output-dir",
         required=True,
         type=Path,
         help="Directory that will receive the versioned artifact.",
-    )
-    parser.add_argument(
-        "--app-id",
-        help=(
-            "Registered ChatGPT Developer mode technical ID beginning with "
-            "plugin_asdk_app_. When present, build a local marketplace bundle "
-            "instead of the public ZIP artifacts."
-        ),
     )
     return parser.parse_args(argv)
 
@@ -1728,40 +1060,19 @@ def main(argv: Sequence[str] = None) -> int:
     args = parse_args(argv)
     repo_root = Path(__file__).resolve().parents[1]
     try:
-        if args.app_id is None:
-            target, version, digest = build_bundle(repo_root, args.output_dir)
-        else:
-            target, version, digest = build_developer_bundle(
-                repo_root,
-                args.output_dir,
-                args.app_id,
-            )
+        targets, version, digests = build_bundle(repo_root, args.output_dir)
     except PackagingError as exc:
         print("error: {0}".format(exc), file=sys.stderr)
         return 1
-    if args.app_id is None:
-        print("Built OpenAI Platform bundle: {0}".format(target))
-        for skill_name in SKILLS:
-            skill_target = args.output_dir.resolve() / public_artifact_filenames(
-                version
-            )[skill_name]
-            print(
-                "Built OpenAI skill bundle {0}: {1}".format(
-                    skill_name,
-                    skill_target,
-                )
-            )
-    else:
-        print("Built OpenAI Developer bundle: {0}".format(target))
-        print("Marketplace: {0}".format(DEVELOPER_MARKETPLACE_NAME))
+    for skill_name in SKILLS:
         print(
-            "Plugin: {0}@{1}".format(
-                PLUGIN_NAME,
-                DEVELOPER_MARKETPLACE_NAME,
+            "Built OpenAI skill bundle {0}: {1}".format(
+                skill_name,
+                targets[skill_name],
             )
         )
+        print("SHA-256 ({0}): {1}".format(skill_name, digests[skill_name]))
     print("Version: {0}".format(version))
-    print("SHA-256: {0}".format(digest))
     return 0
 
 

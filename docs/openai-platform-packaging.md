@@ -1,19 +1,11 @@
-# OpenAI Platform release packaging
+# OpenAI Platform skill packaging
 
-The public lihi directory submission uses the OpenAI Platform **With MCP** flow. The repository package contains the plugin manifest and four skills; the submission portal owns the production MCP server registration.
+The public lihi directory submission uses the OpenAI Platform **With MCP**
+flow. The submission portal owns the production MCP registration, listing
+information, and brand assets. The repository packager produces only the four
+final skill bundles.
 
-## Required brand assets
-
-Add the two approved production images at these fixed repository paths:
-
-```text
-packaging/openai-platform/assets/logo.png
-packaging/openai-platform/assets/composer-icon.png
-```
-
-`logo.png` must be a valid 256×256 PNG and `composer-icon.png` must be a valid 48×48 PNG. Both files must be no larger than 5 MiB. The packager validates PNG chunks, CRC values, exact dimensions, and compressed image data. Missing or invalid assets stop the build before an artifact is replaced.
-
-## Build the ZIP
+## Build the skill ZIPs
 
 Run from the repository root:
 
@@ -22,73 +14,99 @@ python3 scripts/package_openai_platform_bundle.py \
   --output-dir dist/openai-platform
 ```
 
-The script derives the shared `major.minor.patch` version from the Codex and Claude production manifests. For version `0.3.1`, the command creates one complete plugin ZIP and four standalone skill ZIPs:
+The script derives the shared `major.minor.patch` version from the Codex and
+Claude production manifests. For version `0.3.1`, the only outputs are:
 
 ```text
-dist/openai-platform/lihi-openai-platform-0.3.1.zip
 dist/openai-platform/lihi-shorten-0.3.1.zip
 dist/openai-platform/lihi-account-0.3.1.zip
 dist/openai-platform/lihi-switch-group-0.3.1.zip
 dist/openai-platform/lihi-switch-domain-0.3.1.zip
 ```
 
-The complete plugin ZIP root contains `.codex-plugin/plugin.json`, `assets/`, and `skills/`. Each standalone skill ZIP contains exactly one same-named top-level directory, for example `lihi-shorten/SKILL.md` plus that skill's approved `agents/`, `references/`, and `scripts/` files. The standalone ZIPs do not contain a plugin manifest, shared assets, or another skill.
+Each ZIP contains exactly one same-named top-level skill directory. For
+example, `lihi-shorten-0.3.1.zip` contains `lihi-shorten/SKILL.md` plus that
+skill's approved `agents/`, `references/`, and `scripts/` files.
 
-All five ZIPs intentionally contain no `.mcp.json`, `.app.json`, `mcpServers`, develop identity, host-specific authentication command, repository documentation, or build metadata. Files are ordered and timestamped deterministically so identical input produces identical ZIP bytes. Every ZIP is fully staged and validated before any final artifact is replaced. Validation failures preserve the previous set, and a caught filesystem failure during publication rolls back every ZIP already replaced in that run.
+The packager does not accept an app ID and does not create a complete plugin,
+Developer marketplace, manifest, shared asset, `.mcp.json`, or `.app.json`.
+The checked-in images under `packaging/openai-platform/assets/` remain
+available for manual use in the submission portal, but are not packaging
+inputs and do not block skill builds.
 
-The source skills remain unchanged and remain the single source of truth. The packager reads the approved files directly from each Codex production skill directory, copies them into temporary staging, and applies only the exact host-neutral substitutions declared in the script. Every expected source fragment must occur exactly once or the build stops; no second skill tree is stored under `packaging/`.
+The source skills remain unchanged and are the single source of truth. The
+packager reads approved files directly from each Codex production skill,
+stages exact host-neutral rewrites, and validates each archive before replacing
+any existing generated skill ZIP. All four archives use sorted files, fixed ZIP
+timestamps, and consistent permissions for reproducible bytes.
 
-The public package removes the pricing and dedicated-domain promotional-link sentences from skill instructions without inserting replacement service copy. Quota recovery keeps its existing account-limit explanation without directing users to a sales page.
+The public skill bundles remove the pricing and dedicated-domain promotional
+link sentences without inserting replacement service copy. Quota recovery
+keeps its existing account-limit explanation without directing users to a
+sales page.
 
-## Build for ChatGPT Developer mode
+## Build the production marketplace bundle
 
-First enable ChatGPT Developer mode, register the production MCP server at `https://app.lihi.io/mcp/v1/tools`, and copy the resulting technical ID. It begins with `plugin_asdk_app_`.
-
-Pass that ID to the same packager:
+The production marketplace for Codex and Claude Code is packaged separately:
 
 ```bash
-python3 scripts/package_openai_platform_bundle.py \
-  --output-dir dist/openai-developer \
-  --app-id plugin_asdk_app_REPLACE_WITH_REGISTERED_ID
+python3 scripts/package_production_bundle.py \
+  --output-dir dist/production
 ```
 
-Supplying `--app-id` changes the output mode. Instead of the five public ZIPs, the script creates one content-addressed local marketplace directory such as:
+For version `0.3.1`, this creates:
 
 ```text
-dist/openai-developer/
-└── lihi-openai-developer-0.3.1+codex.dev.<hash>/
-    ├── .agents/plugins/marketplace.json
-    └── plugins/lihi/
-        ├── .app.json
-        ├── .codex-plugin/plugin.json
-        ├── assets/
-        └── skills/
+dist/production/lihi-agent-0.3.1/
 ```
 
-The generated `.app.json` maps `lihi` to the supplied technical ID, and the Developer manifest points `apps` to `./.app.json`. Its deterministic `+codex.dev.<hash>` cachebuster changes when the staged plugin content or app ID changes. The registered app ID is written only to the generated Developer artifact and never to the public ZIP or checked-in production runtime files.
+This installable directory retains the production `lihi@lihi` marketplace,
+the `lihi` MCP identity, all four production skill names, and
+`https://app.lihi.io/mcp/v1/tools`. It contains both Codex and Claude Code
+plugin roots. The existing `package_develop_bundle.py` remains isolated to the
+`lihi-dev` identity and the lihidev endpoint.
 
-Install the generated marketplace root and plugin with the paths printed by the command:
+## Build from a release tag
+
+Pushing a SemVer tag runs `.github/workflows/package-openai-platform.yml`.
+Both `v0.3.1` and `0.3.1` tag forms are accepted. The tag must match the shared
+Codex and Claude production manifest version.
 
 ```bash
-codex plugin marketplace add \
-  dist/openai-developer/lihi-openai-developer-0.3.1+codex.dev.<hash>
-codex plugin add lihi@lihi-openai-developer
+git tag v0.3.1
+git push origin v0.3.1
 ```
 
-Restart the ChatGPT desktop app after adding the local marketplace, then test the plugin in a new chat. Rebuilding with identical inputs reuses the identical versioned directory; changed inputs produce a new content-addressed directory.
+The workflow runs unit tests, syntax checks, host parity checks, and whitespace
+validation. It uploads two GitHub Actions artifacts for 90 days:
+
+- `lihi-openai-skills-<tag>` contains the four individual skill ZIPs.
+- `lihi-agent-production-<tag>` contains the installable production
+  marketplace bundle.
+
+The workflow does not create or modify a GitHub Release.
 
 ## Submit with MCP
 
 In the OpenAI submission portal:
 
-1. Choose **With MCP** and provide `https://app.lihi.io/mcp/v1/tools` as the production server URL.
-2. Upload the complete versioned plugin ZIP as the final skill bundle. The four standalone skill ZIPs are also available when a workflow needs one skill archive at a time; each has a single same-named top-level skill directory.
-3. Use the website, support, privacy, and terms URLs embedded in the public manifest.
-4. Complete the generated domain-verification challenge and production tool scan.
-5. Provide exactly five positive test cases, three negative test cases, release notes, and a demo recording.
-6. Confirm every tool publishes accurate `readOnlyHint`, `openWorldHint`, and `destructiveHint` annotations with justifications.
+1. Choose **With MCP** and provide
+   `https://app.lihi.io/mcp/v1/tools` as the production server URL.
+2. Upload each final skill ZIP in its corresponding skill upload flow.
+3. Provide the listing logo, website, support, privacy, and terms information
+   directly in the portal.
+4. Complete the domain-verification challenge and production tool scan.
+5. Provide exactly five positive test cases, three negative test cases,
+   release notes, and any requested demo recording.
+6. Confirm every tool publishes accurate `readOnlyHint`, `openWorldHint`, and
+   `destructiveHint` annotations with justifications.
 7. Provide reviewer-ready demo credentials for the OAuth flow.
 
-A successful local build validates only the static plugin package. It does not validate the live MCP server, domain challenge, reviewer credentials, policy attestations, or portal review.
+A successful local build validates only the static skill and marketplace
+artifacts. It does not validate the live MCP server, domain challenge, reviewer
+credentials, policy attestations, or portal review.
 
-See the official OpenAI documentation for [plugin packaging](https://developers.openai.com/plugins/build/plugins), [submission](https://developers.openai.com/plugins/deploy/submission), and [submission validation errors](https://developers.openai.com/plugins/deploy/submission-errors).
+See the official OpenAI documentation for
+[plugin submission](https://developers.openai.com/plugins/deploy/submission)
+and
+[submission validation errors](https://developers.openai.com/plugins/deploy/submission-errors).

@@ -1,0 +1,107 @@
+name: Package release artifacts
+
+on:
+  push:
+    tags:
+      - "**"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: package-openai-platform-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  package:
+    name: Package ChatGPT skills and production marketplace (Python 3.8)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Set up Python 3.8
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: "3.8"
+
+      - name: Run unit tests
+        run: python -m unittest discover -s tests -v
+
+      - name: Check Python syntax
+        run: >-
+          python -m compileall -q
+          scripts
+          tests
+          plugins/codex/lihi/skills/lihi-shorten/scripts
+          plugins/claude/lihi/skills/lihi-shorten/scripts
+
+      - name: Check Codex and Claude parity
+        run: |
+          cmp plugins/codex/lihi/skills/lihi-shorten/scripts/detect_urls.py plugins/claude/lihi/skills/lihi-shorten/scripts/detect_urls.py
+          cmp plugins/codex/lihi/skills/lihi-shorten/references/shortening-workflow.md plugins/claude/lihi/skills/lihi-shorten/references/shortening-workflow.md
+          cmp plugins/codex/lihi/skills/lihi-switch-group/references/error-recovery.md plugins/claude/lihi/skills/lihi-switch-group/references/error-recovery.md
+          cmp plugins/codex/lihi/skills/lihi-switch-domain/references/error-recovery.md plugins/claude/lihi/skills/lihi-switch-domain/references/error-recovery.md
+
+      - name: Check whitespace errors
+        run: git diff --check "$(git hash-object -t tree /dev/null)" HEAD -- .
+
+      - name: Build OpenAI Platform skill bundles
+        run: >-
+          python scripts/package_openai_platform_bundle.py
+          --output-dir dist/openai-platform
+
+      - name: Build production marketplace bundle
+        run: >-
+          python scripts/package_production_bundle.py
+          --output-dir dist/production
+
+      - name: Verify tag matches package version
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          if [[ "$RELEASE_TAG" =~ ^v?([0-9]+\.[0-9]+\.[0-9]+)$ ]]; then
+            package_version="${BASH_REMATCH[1]}"
+          else
+            echo "::error::Release tag must be a SemVer version such as v0.3.1 or 0.3.1 (got $RELEASE_TAG)."
+            exit 1
+          fi
+
+          for skill_name in lihi-shorten lihi-account lihi-switch-group lihi-switch-domain; do
+            skill_zip="dist/openai-platform/${skill_name}-${package_version}.zip"
+            if [ ! -f "$skill_zip" ]; then
+              echo "::error::Tag $RELEASE_TAG does not match the shared production manifest version."
+              exit 1
+            fi
+          done
+
+          zip_count="$(find dist/openai-platform -maxdepth 1 -type f -name '*.zip' | wc -l | tr -d ' ')"
+          if [ "$zip_count" != "4" ]; then
+            echo "::error::Expected four OpenAI skill ZIPs, found $zip_count."
+            exit 1
+          fi
+
+          production_bundle="dist/production/lihi-agent-${package_version}"
+          if [ ! -d "$production_bundle" ]; then
+            echo "::error::Production marketplace bundle version does not match tag $RELEASE_TAG."
+            exit 1
+          fi
+
+      - name: Upload OpenAI Platform skill bundles
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: lihi-openai-skills-${{ github.ref_name }}
+          path: dist/openai-platform/*.zip
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Upload production marketplace bundle
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: lihi-agent-production-${{ github.ref_name }}
+          path: dist/production/lihi-agent-*
+          if-no-files-found: error
+          include-hidden-files: true
+          retention-days: 90
