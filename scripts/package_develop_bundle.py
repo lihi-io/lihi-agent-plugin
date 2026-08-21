@@ -133,7 +133,13 @@ DEVELOP_RUNTIME_ENDPOINT_FILES = (
 )
 
 TEXT_SUFFIXES = {".json", ".md", ".yaml", ".yml"}
-PACKAGE_IGNORE = shutil.ignore_patterns("__pycache__", "*.pyc", "*.pyo", ".DS_Store")
+PACKAGE_IGNORE = shutil.ignore_patterns(
+    "__pycache__",
+    "*.pyc",
+    "*.pyo",
+    ".DS_Store",
+    "openai-platform-packaging.md",
+)
 SEMVER_PATTERN = re.compile(
     r"^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)"
     r"(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$"
@@ -751,8 +757,8 @@ def rewrite_develop_readme(staging_root: Path) -> None:
         (
             Path("README.zh-TW.md"),
             (
-                "正式環境市集來源為 [weedgood/lihi-agent-plugin.git]"
-                "(https://github.com/weedgood/lihi-agent-plugin.git)。"
+                "正式環境市集來源為 [lihi-io/lihi-agent-plugin.git]"
+                "(https://github.com/lihi-io/lihi-agent-plugin.git)。"
                 "外掛選擇器為 `{0}`，顯示名稱為 `{1}`。".format(
                     DEVELOP_PLUGIN_SELECTOR,
                     DEVELOP_DISPLAY_NAME,
@@ -779,18 +785,8 @@ def rewrite_develop_readme(staging_root: Path) -> None:
         updated = content.replace(source_sentence, develop_sentence)
         updated = updated.replace(
             "codex plugin marketplace add "
-            "https://github.com/weedgood/lihi-agent-plugin.git",
-            "codex plugin marketplace add .",
-        )
-        updated = updated.replace(
-            "codex plugin marketplace add "
             "https://github.com/lihi-io/lihi-agent-plugin.git",
             "codex plugin marketplace add .",
-        )
-        updated = updated.replace(
-            "claude plugin marketplace add "
-            "https://github.com/weedgood/lihi-agent-plugin.git",
-            "claude plugin marketplace add .",
         )
         updated = updated.replace(
             "claude plugin marketplace add "
