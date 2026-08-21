@@ -15,12 +15,12 @@ These scenarios apply to both production host bundles and their generated develo
 
 | ID | Request/result | Expected result |
 | --- | --- | --- |
-| B1 | General account status | Call only `account_status`; show usage, plan, renewal, group, and domain in order. |
-| B2 | Current group or current domain | Call only `account_status`; show only requested selector lines and no pricing guidance. |
+| B1 | General account status | Call only `account_status`; show account email first, followed by usage, plan, renewal, group, and domain in order. |
+| B2 | Account email, current group, or current domain | Call only `account_status`; show only requested lines and no pricing guidance. |
 | B3 | Available groups | Call only `group_options`; require one current entry and list requested choices. |
 | B4 | Status plus available groups | Call both read-only tools; preserve a valid section if the other fails. |
 | B5 | Null status values | Render unlimited/no-expiration/dash-renewal/personal-group/unknown-domain text; `next_renewal_on:null` becomes `續訂日期：-`, and `group_name:null` becomes `目前工作群組：我的群組` without inferring a numeric ID. |
-| B6 | Non-null server labels | Preserve `group_name`, domain, and option names exactly; do not append a personal suffix. |
+| B6 | Non-null server values | Preserve email, `group_name`, domain, and option names exactly; do not append a personal suffix. |
 
 ## C. Group switching
 

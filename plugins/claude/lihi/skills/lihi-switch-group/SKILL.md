@@ -42,6 +42,7 @@ Call `account_switch_group` once with `{group_id:<exact returned id>}`, preservi
 
 Validate a successful response as AccountStatus:
 
+- `email`: a non-empty string.
 - `group_name` and `domain`: string or `null`.
 - `short_urls.used`: non-negative integer; `short_urls.quota`: non-negative integer or `null`.
 - `plan.name`: string; `plan.expires_on` and `plan.next_renewal_on`: `YYYY-MM-DD` string or `null`.
@@ -50,10 +51,11 @@ A valid result commits the selector. Do not call `group_options`, `account_statu
 
 Display the full returned status in this order:
 
-1. `短網址用量：<used> / <quota>`; render `quota:null` as `短網址用量：<used> / 無上限`.
-2. `目前方案：<plan>（到期日：<expires_on>）`; render `expires_on:null` as `目前方案：<plan>（無到期日）`.
-3. `續訂日期：<next_renewal_on>`; render null as `續訂日期：-`.
-4. `目前工作群組：<group_name>`; render null as `目前工作群組：我的群組`.
-5. `目前短網址網域：<domain>`; render null as `目前短網址網域：未回傳可用網域`.
+1. `帳號 Email：<email>`.
+2. `短網址用量：<used> / <quota>`; render `quota:null` as `短網址用量：<used> / 無上限`.
+3. `目前方案：<plan>（到期日：<expires_on>）`; render `expires_on:null` as `目前方案：<plan>（無到期日）`.
+4. `續訂日期：<next_renewal_on>`; render null as `續訂日期：-`.
+5. `目前工作群組：<group_name>`; render null as `目前工作群組：我的群組`.
+6. `目前短網址網域：<domain>`; render null as `目前短網址網域：未回傳可用網域`.
 
-Preserve every non-null display value exactly and append `訂閱方案說明：https://knowledge.lihi.io/pricing` because usage and plan are displayed.
+Preserve `email` and every non-null display value exactly and append `訂閱方案說明：https://knowledge.lihi.io/pricing` because usage and plan are displayed.
