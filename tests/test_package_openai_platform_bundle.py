@@ -99,7 +99,7 @@ class OpenAIPlatformPackagerTests(unittest.TestCase):
         cls.output_dir = Path(cls.temporary.name) / "output"
         cls.process = run_packager(cls.fixture_root, cls.output_dir)
         cls.source_hash_after = tree_hash(cls.fixture_root, cls.source_paths)
-        cls.version = "0.3.1"
+        cls.version = "0.3.2"
         cls.skill_bundles = {
             skill_name: cls.output_dir
             / "{0}-{1}.zip".format(skill_name, cls.version)
@@ -145,9 +145,9 @@ class OpenAIPlatformPackagerTests(unittest.TestCase):
     def test_version_helpers_enforce_shared_semver_core(self):
         self.assertEqual(
             self.packager.semantic_version_core(
-                "0.3.1+codex.cache", Path("manifest.json")
+                "0.3.2+codex.cache", Path("manifest.json")
             ),
-            "0.3.1",
+            "0.3.2",
         )
         with self.assertRaises(self.packager.PackagingError):
             self.packager.semantic_version_core("0.3", Path("manifest.json"))
@@ -195,6 +195,9 @@ class OpenAIPlatformPackagerTests(unittest.TestCase):
                 self.assertEqual(metadata["name"], skill_name)
                 self.assertLessEqual(len(metadata["description"]), 1024)
                 self.assertLessEqual(len("lihi:" + skill_name), 64)
+                if skill_name in {"lihi-switch-group", "lihi-switch-domain"}:
+                    self.assertIn("`email`: a non-empty string", skill_content)
+                    self.assertIn("帳號 Email：<email>", skill_content)
 
                 agent_path = skill_name + "/agents/openai.yaml"
                 agent_text = archive.read(agent_path).decode("utf-8")
@@ -303,6 +306,22 @@ class OpenAIPlatformPackagerTests(unittest.TestCase):
         process = run_packager(fixture_root, output_dir)
         self.assertNotEqual(process.returncode, 0)
         self.assertIn("must share one major.minor.patch version", process.stderr)
+        self.assertFalse(any(output_dir.glob("*.zip")))
+
+    def test_production_build_metadata_fails_before_output(self):
+        temporary, fixture_root = self.fresh_fixture()
+        self.addCleanup(temporary.cleanup)
+        manifest_path = fixture_root / "plugins/codex/lihi/.codex-plugin/plugin.json"
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        manifest["version"] = "0.3.2+codex.cache"
+        manifest_path.write_text(
+            json.dumps(manifest, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        output_dir = Path(temporary.name) / "output"
+        process = run_packager(fixture_root, output_dir)
+        self.assertNotEqual(process.returncode, 0)
+        self.assertIn("without build metadata", process.stderr)
         self.assertFalse(any(output_dir.glob("*.zip")))
 
     def test_missing_source_file_fails_before_output(self):

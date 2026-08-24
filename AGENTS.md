@@ -24,7 +24,7 @@ This repository packages one lihi plugin for Codex and one for Claude Code. Each
 Production endpoint: `https://app.lihi.io/mcp/v1/tools`.
 Develop endpoint: `https://app.lihidev.com/mcp/v1/tools`.
 
-Checked-in runtime files must remain production-only. Develop identities and endpoints may appear in packaging code, CI, tests, and generated artifacts. The server advertises minimum plugin version `0.3.1` through `tools/list` metadata.
+Checked-in runtime files must remain production-only. Develop identities and endpoints may appear in packaging code, CI, tests, and generated artifacts. The server advertises minimum plugin version `0.3.2` through `tools/list` metadata.
 
 ## Host and skill responsibilities
 
@@ -70,16 +70,17 @@ Source code, configuration, tests, logs, docs, changelogs, code comments, resear
 | Tool | Input | Result | Client rule |
 | --- | --- | --- | --- |
 | `site_create` | `{url}` | `{short_url,long_url}` | Non-idempotent; no server-side long-URL reuse. |
-| `account_status` | `{}` | AccountStatus | Current status, group name, and domain. |
+| `account_status` | `{}` | AccountStatus | Account email, current status, group name, and domain. |
 | `group_options` | `{}` | `groups[{id,name,is_current}]` | Non-empty; exactly one current; select by ID. |
 | `account_switch_group` | `{group_id}` | AccountStatus | Use only a fresh returned ID, including `null`. |
 | `domain_options` | `{}` | `domains[{hostname,type}]` | Owned-first presentation; exact-hostname selection. |
 | `account_switch_domain` | `{domain}` | AccountStatus | Pass an exact case-sensitive returned hostname. |
 
-AccountStatus requires `group_name:string|null`, `domain:string|null`, `short_urls.used`, nullable `short_urls.quota`, and `plan.name`, nullable `plan.expires_on`, and nullable `plan.next_renewal_on`.
+AccountStatus requires a non-empty `email:string`, `group_name:string|null`, `domain:string|null`, `short_urls.used`, nullable `short_urls.quota`, and `plan.name`, nullable `plan.expires_on`, and nullable `plan.next_renewal_on`.
 
 - Prefer `structuredContent`; parse the first text JSON block only as compatibility fallback.
 - Treat `result.isError:true` as failure even with HTTP 200, and keep top-level JSON-RPC errors separate.
+- For a general account-status response, display `帳號 Email：<email>` first and preserve the value exactly.
 - Render `plan.next_renewal_on:null` as `續訂日期：-`.
 - Preserve non-null group/domain display values exactly. Render `group_name:null` as `我的群組`, but do not infer a numeric selector ID from it.
 - For group options, preserve non-null names. Synthesize `我的群組` only for null personal names and `未命名工作群組（ID：x）` only for null named-group labels.
@@ -112,6 +113,7 @@ The develop packager:
 
 - derives a shared `major.minor.patch` core from both host manifests;
 - rewrites copied identities, endpoints, four skill folders, manifests, marketplaces, and Codex metadata only inside staging;
+- adds `+codex.<build-number>` only to the staged Codex develop manifest; production manifests and the Claude develop manifest have no Codex cachebuster;
 - emits `DEVELOP_BUILD.json`, where authoritative `skill_names` contains all four develop skills;
 - retains singular `skill_name` at root and `plugins[0]` as a deprecated alias equal to `skill_names[0]` for 0.3 compatibility;
 - excludes caches and preserves source runtime files unchanged.
@@ -126,7 +128,7 @@ archive has one same-named top-level skill directory. It does not accept an app
 ID and does not emit a complete plugin ZIP, marketplace, manifest, MCP config,
 app config, or shared asset.
 
-Both manifests must share core version `0.3.1`. Codex may add one cachebuster suffix. When modifying the Codex bundle, run the plugin-creator cachebuster helper last and validate the plugin. Reinstall only when explicitly requested; after reinstall, test from a new conversation.
+Both checked-in production manifests must use version `0.3.2` without build metadata. A Codex cachebuster is allowed only in a generated develop bundle. Validate the Codex plugin after modifying its bundle. Reinstall only when explicitly requested; after reinstall, test from a new conversation.
 
 Never commit `dist/`, a develop/localhost runtime URL, or a develop identity in production runtime configuration.
 

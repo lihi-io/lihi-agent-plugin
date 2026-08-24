@@ -134,7 +134,7 @@ HOST_NEUTRAL_REWRITES = {
         (
             " When usage, plan, or renewal is shown, append "
             "`訂閱方案說明：https://knowledge.lihi.io/pricing`; omit it for "
-            "group/domain-only answers.",
+            "email/group/domain-only answers.",
             "",
         ),
     ),
@@ -179,10 +179,10 @@ HOST_NEUTRAL_REWRITES = {
     ),
     Path("skills/lihi-switch-group/SKILL.md"): (
         (
-            "Preserve every non-null display value exactly and append "
+            "Preserve `email` and every non-null display value exactly and append "
             "`訂閱方案說明：https://knowledge.lihi.io/pricing` because usage "
             "and plan are displayed.",
-            "Preserve every non-null display value exactly.",
+            "Preserve `email` and every non-null display value exactly.",
         ),
     ),
     Path("skills/lihi-switch-domain/references/oauth-recovery.md"): (
@@ -268,9 +268,14 @@ def release_version(repo_root: Path) -> str:
     for relative_path in SOURCE_MANIFESTS:
         manifest_path = repo_root / relative_path
         manifest = read_json(manifest_path)
-        versions.add(
-            semantic_version_core(manifest.get("version"), manifest_path)
-        )
+        manifest_version = manifest.get("version")
+        version_core = semantic_version_core(manifest_version, manifest_path)
+        if manifest_version != version_core:
+            raise PackagingError(
+                "Production manifests must use plain major.minor.patch "
+                "versions without build metadata: {0}".format(manifest_path)
+            )
+        versions.add(version_core)
     if len(versions) != 1:
         raise PackagingError(
             "Codex and Claude manifests must share one major.minor.patch version"

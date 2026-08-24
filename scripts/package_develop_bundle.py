@@ -196,9 +196,14 @@ def build_develop_version(repo_root: Path, build_number: str) -> str:
     for relative_path in PLUGIN_MANIFESTS:
         manifest_path = repo_root / relative_path
         manifest = read_json(manifest_path)
-        version_cores.add(
-            semantic_version_core(manifest.get("version"), manifest_path)
-        )
+        manifest_version = manifest.get("version")
+        version_core = semantic_version_core(manifest_version, manifest_path)
+        if manifest_version != version_core:
+            raise PackagingError(
+                "Production manifests must use plain major.minor.patch "
+                "versions without build metadata: {0}".format(manifest_path)
+            )
+        version_cores.add(version_core)
     if len(version_cores) != 1:
         raise PackagingError(
             "All Codex and Claude manifests must have the same "
@@ -209,6 +214,15 @@ def build_develop_version(repo_root: Path, build_number: str) -> str:
         version_cores.pop(),
         normalized_build,
     )
+
+
+def codex_develop_version(version: str) -> str:
+    _prefix, separator, build_number = version.rpartition("-develop.")
+    if not separator or not build_number.isdigit():
+        raise PackagingError(
+            "Codex cachebuster requires a generated develop version"
+        )
+    return "{0}+codex.{1}".format(version, build_number)
 
 
 def marketplace_plugin(
@@ -684,7 +698,7 @@ def update_develop_plugin_manifests(
     codex_path = staging_root / DEVELOP_PLUGIN_MANIFESTS[0]
     codex_manifest = read_json(codex_path)
     codex_manifest["name"] = DEVELOP_PLUGIN_NAME
-    codex_manifest["version"] = version
+    codex_manifest["version"] = codex_develop_version(version)
     codex_manifest["description"] = (
         "Develop build connecting Codex to lihi through one OAuth MCP "
         "registration for account status, group and domain switching, and "
@@ -964,6 +978,10 @@ def validate_staged_package(staging_root: Path, version: str) -> None:
                 )
             )
 
+    expected_manifest_versions = (
+        codex_develop_version(version),
+        version,
+    )
     for index, relative_path in enumerate(DEVELOP_PLUGIN_MANIFESTS):
         path = staging_root / relative_path
         manifest = read_json(path)
@@ -975,7 +993,7 @@ def validate_staged_package(staging_root: Path, version: str) -> None:
         )
         if (
             manifest.get("name") != DEVELOP_PLUGIN_NAME
-            or manifest.get("version") != version
+            or manifest.get("version") != expected_manifest_versions[index]
             or display_name != DEVELOP_DISPLAY_NAME
         ):
             raise PackagingError(

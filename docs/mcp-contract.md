@@ -1,12 +1,12 @@
 # lihi MCP client contract
 
-This document defines the 0.3.1 agent-side contract for the production Streamable HTTP endpoint:
+This document defines the 0.3.2 agent-side contract for the production Streamable HTTP endpoint:
 
 ```text
 https://app.lihi.io/mcp/v1/tools
 ```
 
-Codex and Claude Code own transport and OAuth. Each plugin registers one MCP server and exposes the same six tools through four skills. `tools/list` advertises `_meta["lihi/plugin"].minVersion` as `0.3.1`.
+Codex and Claude Code own transport and OAuth. Each plugin registers one MCP server and exposes the same six tools through four skills. `tools/list` advertises `_meta["lihi/plugin"].minVersion` as `0.3.2`.
 
 Requests containing an `Origin` header are not rejected solely for that header. This contract does not claim complete browser or CORS support.
 
@@ -38,6 +38,7 @@ Input is `{}`. Output is exactly the AccountStatus shape:
 
 ```json
 {
+  "email": "non-empty string",
   "group_name": "string or null",
   "domain": "string or null",
   "short_urls": {"used": 0, "quota": "non-negative integer or null"},
@@ -49,15 +50,16 @@ Input is `{}`. Output is exactly the AccountStatus shape:
 }
 ```
 
-`quota:null` means unlimited. Null dates do not imply cancellation or payment failure. `group_name` is display-only: render `group_name:null` as `我的群組`, but never infer a numeric group ID from it. Preserve non-null `group_name` and `domain` exactly.
+`quota:null` means unlimited. Null dates do not imply cancellation or payment failure. `group_name` is display-only: render `group_name:null` as `我的群組`, but never infer a numeric group ID from it. Preserve `email` and non-null `group_name` and `domain` exactly.
 
 For a full Chinese status, render in this order:
 
-1. `短網址用量：<used> / <quota>`; null quota → `無上限`.
-2. `目前方案：<name>（到期日：<expires_on>）`; null expiration → `目前方案：<name>（無到期日）`.
-3. `續訂日期：<next_renewal_on>`; null → `續訂日期：-`.
-4. `目前工作群組：<group_name>`; null → `目前工作群組：我的群組`.
-5. `目前短網址網域：<domain>`; null → `目前短網址網域：未回傳可用網域`.
+1. `帳號 Email：<email>`.
+2. `短網址用量：<used> / <quota>`; null quota → `無上限`.
+3. `目前方案：<name>（到期日：<expires_on>）`; null expiration → `目前方案：<name>（無到期日）`.
+4. `續訂日期：<next_renewal_on>`; null → `續訂日期：-`.
+5. `目前工作群組：<group_name>`; null → `目前工作群組：我的群組`.
+6. `目前短網址網域：<domain>`; null → `目前短網址網域：未回傳可用網域`.
 
 Show pricing guidance only when usage, plan, or renewal is included.
 
@@ -110,7 +112,7 @@ Successful output commits the selector and is displayed directly without another
 
 ## Skill routing
 
-- General account status, usage, plan, current group, or current domain → `account_status`.
+- General account status, account email, usage, plan, current group, or current domain → `account_status`.
 - Available work-group list → `group_options`.
 - Requests covering both status/current selectors and available groups → both read-only tools.
 - Group mutation → fresh `group_options`, then `account_switch_group`.

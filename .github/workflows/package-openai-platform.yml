@@ -65,7 +65,7 @@ jobs:
           if [[ "$RELEASE_TAG" =~ ^v?([0-9]+\.[0-9]+\.[0-9]+)$ ]]; then
             package_version="${BASH_REMATCH[1]}"
           else
-            echo "::error::Release tag must be a SemVer version such as v0.3.1 or 0.3.1 (got $RELEASE_TAG)."
+            echo "::error::Release tag must be a SemVer version such as v0.3.2 or 0.3.2 (got $RELEASE_TAG)."
             exit 1
           fi
 

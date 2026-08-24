@@ -8,7 +8,7 @@ Use lihi account status, group and short URL domain switching, and URL shortenin
 
 ### `lihi@lihi`
 
-- Shows short URL usage, quota, subscription dates, current work group, and current short URL domain.
+- Shows the account email, short URL usage, quota, subscription dates, current work group, and current short URL domain.
 - Switches the active work group or short URL domain after checking fresh choices.
 - Works while polishing copy or preparing human-facing content for release.
 - Automatically shortens every eligible new long URL detected in that content.
@@ -94,7 +94,7 @@ Which work group am I currently using?
 Show my lihi account information.
 ```
 
-The last, general request uses `account_status` and displays short URL usage, current plan, renewal date, current work group, and current short URL domain in that order. Ask for available groups separately when you need the full list.
+The last, general request uses `account_status` and displays the account email first, followed by short URL usage, current plan, renewal date, current work group, and current short URL domain. Ask for available groups separately when you need the full list.
 
 To switch the active work group:
 
