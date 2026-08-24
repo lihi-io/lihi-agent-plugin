@@ -116,22 +116,25 @@ class AccountPluginTests(unittest.TestCase):
 
     def test_account_routing_and_account_status_shape(self):
         required = (
-            "Call `account_status` with `{}` for general account information",
+            "Call `account_status` with `{}` for general account information or status, account email",
             "Call `group_options` with `{}` only when",
             "Call both only when",
+            "`email`: a non-empty string",
             "`group_name`: a string or `null`",
             "`domain`: a string or `null`",
+            "帳號 Email：<email>",
             "短網址用量：<used> / 無上限",
             "目前方案：<plan>（無到期日）",
             "續訂日期：-",
             "目前工作群組：我的群組",
             "目前短網址網域：未回傳可用網域",
-            "Preserve every non-null `group_name` and `domain` exactly",
+            "Preserve `email` and every non-null `group_name` and `domain` exactly",
         )
         for host in self.roots:
             content = self.skill(host, "lihi-account")
             for marker in required:
                 self.assertIn(marker, content)
+            self.assertLess(content.index("帳號 Email"), content.index("短網址用量"))
             self.assertLess(content.index("短網址用量"), content.index("目前方案"))
             self.assertLess(content.index("目前方案"), content.index("續訂日期"))
             self.assertLess(content.index("續訂日期"), content.index("目前工作群組"))
@@ -210,6 +213,8 @@ class AccountPluginTests(unittest.TestCase):
     def test_switch_skills_render_complete_account_status_consistently(self):
         shared_markers = (
             "Display the full returned status in this order",
+            "`email`: a non-empty string",
+            "帳號 Email：<email>",
             "短網址用量：<used> / <quota>",
             "短網址用量：<used> / 無上限",
             "目前方案：<plan>（到期日：<expires_on>）",
@@ -220,7 +225,7 @@ class AccountPluginTests(unittest.TestCase):
             "目前工作群組：我的群組",
             "目前短網址網域：<domain>",
             "訂閱方案說明：https://knowledge.lihi.io/pricing",
-            "Preserve every non-null display value exactly",
+            "Preserve `email` and every non-null display value exactly",
         )
         for host in self.roots:
             for skill_name in ("lihi-switch-group", "lihi-switch-domain"):
@@ -229,6 +234,7 @@ class AccountPluginTests(unittest.TestCase):
                     for marker in shared_markers:
                         self.assertIn(marker, content)
                     positions = [content.index(marker) for marker in (
+                        "帳號 Email：<email>",
                         "短網址用量：<used> / <quota>",
                         "目前方案：<plan>（到期日：<expires_on>）",
                         "續訂日期：<next_renewal_on>",

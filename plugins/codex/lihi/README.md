@@ -10,7 +10,7 @@ https://app.lihi.io/mcp/v1/tools
 
 Its four skills share this single registration:
 
-- `lihi-account` reads account status, current group and domain, and available groups.
+- `lihi-account` reads the account email and status, current group and domain, and available groups.
 - `lihi-switch-group` switches the active work group from fresh `group_options`.
 - `lihi-switch-domain` switches the short URL domain from fresh `domain_options`.
 - `lihi-shorten` automatically shortens eligible new URLs in revised outbound copy.
@@ -21,7 +21,7 @@ Codex owns OAuth and token refresh. With prior authorization, an ordinary tool-e
 
 ## Account and selector behavior
 
-`account_status` provides usage, plan, renewal, current work group, and current short URL domain. `group_options` is used only for available-group lists. Both selector skills fetch fresh options before mutation and display the complete AccountStatus returned by a successful switch without another lookup. A Chinese domain selection list distinguishes dedicated domains (`owned`) from public domains (`public`), recommends a dedicated domain, and links to `https://lihidomain.com/` without selecting an option.
+`account_status` provides the account email, usage, plan, renewal, current work group, and current short URL domain. General status answers display the account email first. `group_options` is used only for available-group lists. Both selector skills fetch fresh options before mutation and display the complete AccountStatus returned by a successful switch without another lookup. A Chinese domain selection list distinguishes dedicated domains (`owned`) from public domains (`public`), recommends a dedicated domain, and links to `https://lihidomain.com/` without selecting an option.
 
 A selector change may revoke the current access token while leaving refresh authorization valid. Codex refreshes only when the next lihi request needs access. Possibly dispatched switch calls are never replayed blindly.
 

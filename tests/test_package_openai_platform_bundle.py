@@ -195,6 +195,9 @@ class OpenAIPlatformPackagerTests(unittest.TestCase):
                 self.assertEqual(metadata["name"], skill_name)
                 self.assertLessEqual(len(metadata["description"]), 1024)
                 self.assertLessEqual(len("lihi:" + skill_name), 64)
+                if skill_name in {"lihi-switch-group", "lihi-switch-domain"}:
+                    self.assertIn("`email`: a non-empty string", skill_content)
+                    self.assertIn("帳號 Email：<email>", skill_content)
 
                 agent_path = skill_name + "/agents/openai.yaml"
                 agent_text = archive.read(agent_path).decode("utf-8")
