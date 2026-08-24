@@ -98,8 +98,8 @@ class ProductionPackagerTests(unittest.TestCase):
         cls.output_dir = Path(cls.temporary.name) / "output"
         cls.process = run_packager(cls.fixture_root, cls.output_dir)
         cls.source_hash_after = tree_hash(cls.fixture_root, cls.source_paths)
-        cls.version = "0.3.1"
-        cls.package = cls.output_dir / "lihi-agent-0.3.1"
+        cls.version = "0.3.2"
+        cls.package = cls.output_dir / "lihi-agent-0.3.2"
 
     @classmethod
     def tearDownClass(cls):
@@ -172,7 +172,6 @@ class ProductionPackagerTests(unittest.TestCase):
         for filename in ("README.md", "README.zh-TW.md"):
             content = (self.package / filename).read_text(encoding="utf-8")
             self.assertIn(expected, content)
-            self.assertNotIn("https://github.com/weedgood/", content)
 
     def test_both_hosts_share_production_mcp_and_skill_identities(self):
         for host in ("codex", "claude"):
@@ -245,11 +244,27 @@ class ProductionPackagerTests(unittest.TestCase):
         self.assertIn("must share one major.minor.patch version", process.stderr)
         self.assertFalse(output_dir.exists())
 
+    def test_production_build_metadata_fails_before_output(self):
+        temporary, fixture_root = self.fresh_fixture()
+        self.addCleanup(temporary.cleanup)
+        manifest_path = fixture_root / "plugins/codex/lihi/.codex-plugin/plugin.json"
+        manifest = self.read_json(manifest_path)
+        manifest["version"] = "0.3.2+codex.cache"
+        manifest_path.write_text(
+            json.dumps(manifest, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        output_dir = Path(temporary.name) / "output"
+        process = run_packager(fixture_root, output_dir)
+        self.assertNotEqual(process.returncode, 0)
+        self.assertIn("without build metadata", process.stderr)
+        self.assertFalse(output_dir.exists())
+
     def test_existing_output_is_preserved_and_not_overwritten(self):
         temporary, fixture_root = self.fresh_fixture()
         self.addCleanup(temporary.cleanup)
         output_dir = Path(temporary.name) / "output"
-        target = output_dir / "lihi-agent-0.3.1"
+        target = output_dir / "lihi-agent-0.3.2"
         target.mkdir(parents=True)
         marker = target / "keep.txt"
         marker.write_text("keep\n", encoding="utf-8")

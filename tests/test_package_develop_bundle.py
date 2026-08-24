@@ -77,7 +77,8 @@ class DevelopPackagerTests(unittest.TestCase):
         )
         cls.source_hash_after = tree_hash(cls.repo_root, cls.source_paths)
         cls.source_hash_before = before
-        cls.version = "0.3.1-develop.42"
+        cls.version = "0.3.2-develop.42"
+        cls.codex_version = cls.version + "+codex.42"
         cls.package = cls.output_dir / ("lihi-agent-" + cls.version)
 
     @classmethod
@@ -96,14 +97,37 @@ class DevelopPackagerTests(unittest.TestCase):
     def test_version_helpers_enforce_shared_semver_core(self):
         self.assertEqual(
             self.packager.semantic_version_core(
-                "0.3.1+codex.cache", Path("manifest.json")
+                "0.3.2+codex.cache", Path("manifest.json")
             ),
-            "0.3.1",
+            "0.3.2",
+        )
+        self.assertEqual(
+            self.packager.codex_develop_version(self.version),
+            self.codex_version,
         )
         with self.assertRaises(self.packager.PackagingError):
             self.packager.semantic_version_core("0.3", Path("manifest.json"))
         with self.assertRaises(self.packager.PackagingError):
+            self.packager.codex_develop_version("0.3.2")
+        with self.assertRaises(self.packager.PackagingError):
             self.packager.build_develop_version(self.repo_root, "bad")
+
+    def test_production_build_metadata_is_rejected(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            fixture_root = Path(temporary)
+            for index, relative_path in enumerate(self.packager.PLUGIN_MANIFESTS):
+                path = fixture_root / relative_path
+                path.parent.mkdir(parents=True, exist_ok=True)
+                version = "0.3.2+codex.cache" if index == 0 else "0.3.2"
+                path.write_text(
+                    json.dumps({"version": version}) + "\n",
+                    encoding="utf-8",
+                )
+            with self.assertRaisesRegex(
+                self.packager.PackagingError,
+                "without build metadata",
+            ):
+                self.packager.build_develop_version(fixture_root, "42")
 
     def test_develop_marketplaces_and_manifests_are_isolated(self):
         codex_marketplace = self.read_json(
@@ -133,9 +157,11 @@ class DevelopPackagerTests(unittest.TestCase):
             self.package
             / "plugins/claude/lihi-dev/.claude-plugin/plugin.json"
         )
+        self.assertEqual(codex_manifest["name"], "lihi-dev")
+        self.assertEqual(codex_manifest["version"], self.codex_version)
+        self.assertEqual(claude_manifest["name"], "lihi-dev")
+        self.assertEqual(claude_manifest["version"], self.version)
         for manifest in (codex_manifest, claude_manifest):
-            self.assertEqual(manifest["name"], "lihi-dev")
-            self.assertEqual(manifest["version"], self.version)
             self.assertIn("automatic URL shortening", manifest["description"])
 
     def test_each_develop_host_has_four_skills_and_one_mcp(self):
@@ -170,6 +196,7 @@ class DevelopPackagerTests(unittest.TestCase):
     def test_build_metadata_uses_authoritative_list_and_compatibility_alias(self):
         metadata = self.read_json(self.package / "DEVELOP_BUILD.json")
         self.assertEqual(metadata["version"], self.version)
+        self.assertNotIn("+codex.", metadata["version"])
         self.assertEqual(metadata["commit"], "abcdef1")
         self.assertEqual(metadata["skill_names"], list(DEVELOP_SKILLS))
         self.assertEqual(metadata["skill_name"], metadata["skill_names"][0])

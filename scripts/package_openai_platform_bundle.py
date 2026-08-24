@@ -268,9 +268,14 @@ def release_version(repo_root: Path) -> str:
     for relative_path in SOURCE_MANIFESTS:
         manifest_path = repo_root / relative_path
         manifest = read_json(manifest_path)
-        versions.add(
-            semantic_version_core(manifest.get("version"), manifest_path)
-        )
+        manifest_version = manifest.get("version")
+        version_core = semantic_version_core(manifest_version, manifest_path)
+        if manifest_version != version_core:
+            raise PackagingError(
+                "Production manifests must use plain major.minor.patch "
+                "versions without build metadata: {0}".format(manifest_path)
+            )
+        versions.add(version_core)
     if len(versions) != 1:
         raise PackagingError(
             "Codex and Claude manifests must share one major.minor.patch version"

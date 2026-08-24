@@ -24,7 +24,7 @@ This repository packages one lihi plugin for Codex and one for Claude Code. Each
 Production endpoint: `https://app.lihi.io/mcp/v1/tools`.
 Develop endpoint: `https://app.lihidev.com/mcp/v1/tools`.
 
-Checked-in runtime files must remain production-only. Develop identities and endpoints may appear in packaging code, CI, tests, and generated artifacts. The server advertises minimum plugin version `0.3.1` through `tools/list` metadata.
+Checked-in runtime files must remain production-only. Develop identities and endpoints may appear in packaging code, CI, tests, and generated artifacts. The server advertises minimum plugin version `0.3.2` through `tools/list` metadata.
 
 ## Host and skill responsibilities
 
@@ -113,6 +113,7 @@ The develop packager:
 
 - derives a shared `major.minor.patch` core from both host manifests;
 - rewrites copied identities, endpoints, four skill folders, manifests, marketplaces, and Codex metadata only inside staging;
+- adds `+codex.<build-number>` only to the staged Codex develop manifest; production manifests and the Claude develop manifest have no Codex cachebuster;
 - emits `DEVELOP_BUILD.json`, where authoritative `skill_names` contains all four develop skills;
 - retains singular `skill_name` at root and `plugins[0]` as a deprecated alias equal to `skill_names[0]` for 0.3 compatibility;
 - excludes caches and preserves source runtime files unchanged.
@@ -127,7 +128,7 @@ archive has one same-named top-level skill directory. It does not accept an app
 ID and does not emit a complete plugin ZIP, marketplace, manifest, MCP config,
 app config, or shared asset.
 
-Both manifests must share core version `0.3.1`. Codex may add one cachebuster suffix. When modifying the Codex bundle, run the plugin-creator cachebuster helper last and validate the plugin. Reinstall only when explicitly requested; after reinstall, test from a new conversation.
+Both checked-in production manifests must use version `0.3.2` without build metadata. A Codex cachebuster is allowed only in a generated develop bundle. Validate the Codex plugin after modifying its bundle. Reinstall only when explicitly requested; after reinstall, test from a new conversation.
 
 Never commit `dist/`, a develop/localhost runtime URL, or a develop identity in production runtime configuration.
 

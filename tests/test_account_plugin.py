@@ -69,9 +69,9 @@ class AccountPluginTests(unittest.TestCase):
         )
         self.assertEqual(codex["name"], "lihi")
         self.assertEqual(claude["name"], "lihi")
-        self.assertTrue(codex["version"].startswith("0.3.1"))
-        self.assertEqual(claude["version"], "0.3.1")
-        self.assertEqual(codex["version"].split("+")[0], claude["version"])
+        self.assertEqual(codex["version"], "0.3.2")
+        self.assertEqual(claude["version"], "0.3.2")
+        self.assertEqual(codex["version"], claude["version"])
         self.assertLessEqual(len(codex["interface"]["defaultPrompt"]), 3)
         self.assertTrue(
             any("domain" in prompt.lower() for prompt in codex["interface"]["defaultPrompt"])
@@ -496,8 +496,8 @@ class AccountPluginTests(unittest.TestCase):
         for text in WORK_GROUP_QUOTA_ERRORS:
             self.assertIn(text, contract)
             self.assertIn(text, guide)
-        self.assertIn("minimum plugin version `0.3.1`", guide)
-        self.assertIn("minimum plugin version is 0.3.1", acceptance)
+        self.assertIn("minimum plugin version `0.3.2`", guide)
+        self.assertIn("minimum plugin version is 0.3.2", acceptance)
         for content in (contract, acceptance, guide):
             self.assertNotIn("forbidden_origin", content)
             self.assertNotIn("Browser clients are unsupported", content)

@@ -7,7 +7,7 @@ These scenarios apply to both production host bundles and their generated develo
 | ID | Scenario | Expected result |
 | --- | --- | --- |
 | A1 | Inspect either host bundle | Exactly four skills and one shared OAuth MCP registration exist. |
-| A2 | Inspect tool metadata | Six current tools are documented and minimum plugin version is 0.3.1. |
+| A2 | Inspect tool metadata | Six current tools are documented and minimum plugin version is 0.3.2. |
 | A3 | Build develop artifact | Four `-dev` skills, `lihi-dev` identities, and develop endpoint appear; production runtime remains unchanged. |
 | A4 | Inspect requests with `Origin` | The contract does not reject solely because `Origin` is present and does not overclaim browser support. |
 

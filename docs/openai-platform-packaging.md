@@ -15,17 +15,17 @@ python3 scripts/package_openai_platform_bundle.py \
 ```
 
 The script derives the shared `major.minor.patch` version from the Codex and
-Claude production manifests. For version `0.3.1`, the only outputs are:
+Claude production manifests. For version `0.3.2`, the only outputs are:
 
 ```text
-dist/openai-platform/lihi-shorten-0.3.1.zip
-dist/openai-platform/lihi-account-0.3.1.zip
-dist/openai-platform/lihi-switch-group-0.3.1.zip
-dist/openai-platform/lihi-switch-domain-0.3.1.zip
+dist/openai-platform/lihi-shorten-0.3.2.zip
+dist/openai-platform/lihi-account-0.3.2.zip
+dist/openai-platform/lihi-switch-group-0.3.2.zip
+dist/openai-platform/lihi-switch-domain-0.3.2.zip
 ```
 
 Each ZIP contains exactly one same-named top-level skill directory. For
-example, `lihi-shorten-0.3.1.zip` contains `lihi-shorten/SKILL.md` plus that
+example, `lihi-shorten-0.3.2.zip` contains `lihi-shorten/SKILL.md` plus that
 skill's approved `agents/`, `references/`, and `scripts/` files.
 
 The packager does not accept an app ID and does not create a complete plugin,
@@ -54,27 +54,29 @@ python3 scripts/package_production_bundle.py \
   --output-dir dist/production
 ```
 
-For version `0.3.1`, this creates:
+For version `0.3.2`, this creates:
 
 ```text
-dist/production/lihi-agent-0.3.1/
+dist/production/lihi-agent-0.3.2/
 ```
 
 This installable directory retains the production `lihi@lihi` marketplace,
 the `lihi` MCP identity, all four production skill names, and
 `https://app.lihi.io/mcp/v1/tools`. It contains both Codex and Claude Code
 plugin roots. The existing `package_develop_bundle.py` remains isolated to the
-`lihi-dev` identity and the lihidev endpoint.
+`lihi-dev` identity and the lihidev endpoint. Only its staged Codex develop
+manifest adds `+codex.<build-number>`; production manifests and the staged
+Claude develop manifest keep versions without Codex build metadata.
 
 ## Build from a release tag
 
 Pushing a SemVer tag runs `.github/workflows/package-openai-platform.yml`.
-Both `v0.3.1` and `0.3.1` tag forms are accepted. The tag must match the shared
+Both `v0.3.2` and `0.3.2` tag forms are accepted. The tag must match the shared
 Codex and Claude production manifest version.
 
 ```bash
-git tag v0.3.1
-git push origin v0.3.1
+git tag v0.3.2
+git push origin v0.3.2
 ```
 
 The workflow runs unit tests, syntax checks, host parity checks, and whitespace
