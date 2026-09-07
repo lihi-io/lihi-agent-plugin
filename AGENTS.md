@@ -100,6 +100,8 @@ AccountStatus requires a non-empty `email:string`, `group_name:string|null`, `do
 - Switch OAuth references own authentication only and return control without calling a lihi lookup or mutation tool. Switch error-recovery references alone own refetch, verification, and retry after authentication returns.
 - Per authentication incident, allow at most one host refresh, one qualifying interactive reauthentication, and one resumed operation. A second authentication failure stops.
 - Interactive reauthentication is limited to a refresh-token exchange returning HTTP 401 or explicitly reporting the refresh token invalid, expired, revoked, or unusable. Unmatched readable errors are reported without login.
+- During switching, resolve required tools through the host's callable catalog/discovery. Tool absence, an empty resource listing, a `tools/list` omission, or `Unknown tool name.` alone proves neither missing authorization nor a legacy tool grant; inspect available read-only connection status before classifying recovery.
+- Switch recovery requires explicit host confirmation for initial authorization and for a successful refresh. `Auth required` alone does not prove no prior authorization exists. Missing/unbound authorization-server issuer metadata in stored refresh credentials is a host credential-binding failure, not evidence that the refresh token itself is invalid; preserve state and report the blocked host recovery without automatic login or credential changes.
 - Requests containing `Origin` are no longer rejected solely because of that header. Do not infer complete browser or CORS support from this fact.
 - If compaction removes state required for a safe next operation, fail closed and recover the exact state before mutation or release.
 

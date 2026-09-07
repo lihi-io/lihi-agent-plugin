@@ -66,11 +66,15 @@ Do not pass the downloaded ZIP file itself to the marketplace command. Extract i
 
 ## Authenticate
 
+If a group or domain switch reports that a tool is unavailable, this does not by itself mean you need to sign in again. The plugin checks available connection information before deciding how to recover.
+
 ### Codex
 
 Codex may ask you to authenticate lihi during installation or the first time the plugin is used. If a task still detects that initial authentication is required, or detects a qualifying refresh-token failure that requires reauthentication, Codex first assists by running `codex mcp login lihi` once. If that assisted command cannot start or does not complete authentication, run `codex mcp login lihi` yourself in a terminal. If the command is unavailable, open **MCP settings → lihi → Authenticate**. With prior lihi authorization, an ordinary tool-endpoint `401 invalid_token` or `Auth required` first uses one host-managed refresh attempt and does not by itself start interactive login.
 
 After installing or updating, start a new Codex conversation before using the plugin. If the Codex app still shows the old plugin version, fully quit and reopen the application as a fallback, then start another new conversation.
+
+If Codex reports that stored refresh credentials lack an issuer or cannot be bound to it, the plugin reports a Codex authorization-state problem and stops automatic recovery. Check the lihi connection in MCP settings; updating the plugin alone does not repair that stored authorization, and a previously confirmed switch remains completed.
 
 ### Claude Code
 

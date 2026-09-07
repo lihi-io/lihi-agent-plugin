@@ -152,6 +152,8 @@ Unknown text follows generic error handling. Do not silently route a future loca
 
 ## Retry and OAuth state machine
 
+- Before switching, resolve the required tool from the host's callable catalog or available tool discovery. If unresolved, read switch error recovery before choosing any authentication action. Resource listings are not tool listings.
+- Tool absence, a server `tools/list` omission, or JSON-RPC `Unknown tool name.` alone is not evidence of missing authorization or a legacy grant. Check available read-only connection status and distinguish loading/filtering/configuration failures from an underlying authentication error. Attempt host tool discovery at most once per availability failure; do not fabricate a tool or change configuration to expose it.
 - A validated switch is never replayed or verified with another lookup.
 - A switch 401 may be retried once only when non-dispatch is conclusive; refetch options and re-resolve by stable ID or exact hostname first.
 - A possibly dispatched switch is not replayed. Verify once with `group_options.is_current` for group or `account_status.domain` for domain, then require a fresh choice if unresolved.
@@ -159,6 +161,11 @@ Unknown text follows generic error handling. Do not silently route a future loca
 - Switch OAuth references recover authentication and return control without calling lihi tools. Switch error-recovery references alone own the fresh discovery, read-only verification, or permitted retry.
 - Per authentication incident, allow one host refresh, one qualifying interactive authentication, and one resumed operation. A second authentication failure stops.
 - Interactive reauthentication is limited to an HTTP 401 refresh-token exchange or explicit invalid/expired/revoked/unusable refresh-token error. `invalid_grant` qualifies only in that exchange.
+- In switch recovery, initial authentication requires the host to confirm no prior authorization exists. Unknown state and `Auth required` alone do not qualify. A refreshed tool catalog also does not prove authentication recovered.
+- Host-managed refresh is not an agent-callable lihi tool or a login command. If the host cannot perform or confirm refresh, preserve the interrupted operation and report that recovery is unconfirmed; do not return `authentication_recovered` or start interactive login as a fallback.
+- A stored credential missing its authorization-server issuer or unable to bind to that issuer blocks host refresh. This is a host credential-binding failure, not proof that the refresh token itself is invalid. Preserve selector and dispatch state, report that host authorization-state repair is needed, and do not automatically refresh, log in, modify credentials, or resume the operation.
+
+Codex diagnostics such as `stored OAuth refresh credentials could not be bound to their issuer` and `OAuth refresh credentials for server lihi are missing an authorization server issuer` belong to that credential-binding branch, even when the host also says `authorization required`. A later `invalid_token` or unavailable tool catalog does not turn those diagnostics into an invalid-refresh-token response. Selector changes intentionally revoke the old access token, so this host failure can become visible immediately after a successful switch.
 
 ### OAuth interactive authentication — Codex
 

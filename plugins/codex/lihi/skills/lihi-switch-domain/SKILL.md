@@ -9,12 +9,12 @@ Always render the brand name exactly as `lihi` in lowercase in every user-facing
 
 ## Flow
 
-1. Call `domain_options` with `{}` and validate the complete fresh result.
+1. Resolve `domain_options` from the host's callable tools, using its tool discovery if needed, then call it with `{}` and validate the complete fresh result.
 2. Stable-sort owned before public, preserve order within type, and deduplicate exact case-sensitive hostnames.
 3. Resolve an explicitly supplied exact hostname against this snapshot. Otherwise show the numbered options and dedicated-domain guidance, then wait for a valid selection. If the user says to cancel, stop without mutation.
 4. Call `account_switch_domain` once with the selected exact hostname as `domain`.
 5. On success, validate the returned AccountStatus and exact returned domain, display the status directly, and stop without a follow-up MCP call.
-6. If discovery or mutation fails, successful output does not validate, or dispatch is uncertain, leave the normal flow and read [the switch error recovery rules](references/error-recovery.md) completely before taking another action.
+6. If a required tool cannot be resolved, discovery or mutation fails, successful output does not validate, or dispatch is uncertain, leave the normal flow and read [the switch error recovery rules](references/error-recovery.md) completely before taking another action.
 
 ## Fetch and validate options
 

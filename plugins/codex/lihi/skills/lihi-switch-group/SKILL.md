@@ -9,12 +9,12 @@ Always render the brand name exactly as `lihi` in lowercase in every user-facing
 
 ## Flow
 
-1. Call `group_options` with `{}` and validate the complete fresh snapshot.
+1. Resolve `group_options` from the host's callable tools, using its tool discovery if needed, then call it with `{}` and validate the complete fresh snapshot.
 2. Stop without mutation when only one group exists or when the requested target is already current.
 3. Resolve an explicitly named target against the fresh snapshot. Otherwise show the current group and numbered alternatives, then wait for one valid selection or cancellation.
 4. Call `account_switch_group` once with the selected entry's exact `id` as `group_id`.
 5. On success, validate and display the returned AccountStatus directly, then complete the group-switch operation without a follow-up MCP call. For a standalone request, stop; when domain-switch error recovery invoked this skill, return control to that caller after display.
-6. If discovery or mutation fails, successful output does not validate, or dispatch is uncertain, leave the normal flow and read [the switch error recovery rules](references/error-recovery.md) completely before taking another action.
+6. If a required tool cannot be resolved, discovery or mutation fails, successful output does not validate, or dispatch is uncertain, leave the normal flow and read [the switch error recovery rules](references/error-recovery.md) completely before taking another action.
 
 ## Fetch and validate current choices
 

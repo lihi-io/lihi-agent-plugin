@@ -89,6 +89,14 @@ These scenarios apply to both production host bundles and their generated develo
 | G5 | Codex interactive recovery | Run `codex mcp login lihi` once when available, then user-command fallback, then settings fallback only if unavailable. |
 | G6 | Claude Code interactive recovery | Open `/mcp`, select lihi, and choose **Authenticate**; never reference Codex commands. |
 | G7 | No create succeeded or may have dispatched | State in the user's language that no link was created or published; Chinese includes `目前尚未建立或發布任何連結。` |
+| G8 | Switch tool is deferred and becomes callable through host tool discovery | Resolve it once, then continue the interrupted flow under its dispatch rules; no login or claim that authentication recovered. |
+| G9 | Switch tool remains absent; connection status says pending startup or disabled/filtered | Report host tool unavailability, preserve state, and stop without login, configuration changes, or fabricated calls. Empty resources do not prove missing tools or authorization. |
+| G10 | `tools/list` omits a switch tool or a call returns `Unknown tool name.` without legacy-grant evidence | Report discovery/configuration mismatch; do not infer a legacy token, refresh, or log in. |
+| G11 | `Auth required` during switch discovery, with prior authorization unknown | Classify an authentication signal but do not assume first-time login. If the host cannot perform or confirm recovery, report that limitation without resuming. |
+| G12 | Switch succeeds, then a later lookup gets 401 while stored refresh credentials lack or cannot bind to their issuer | Preserve the completed switch. Report host credential-binding failure, even if accompanied by `authorization required`; do not refresh automatically, start login, change credentials, or replay the switch. |
+| G13 | Possibly dispatched switch followed by issuer-binding failure during recovery | Preserve uncertainty and selected identity; report that verification is blocked. Do not claim success, claim the selector is unchanged, or replay the mutation. |
+| G14 | Host explicitly confirms no prior authorization exists during switch recovery | Use the host-specific initial authentication action once, then let error recovery resume fresh discovery under its budget. |
+| G15 | Existing switch authorization, host confirms refresh success | Return `authentication_recovered`; the caller alone resumes fresh discovery or permitted verification/retry. Tool availability alone cannot substitute for host confirmation. |
 
 ## H. Static and package invariants
 
