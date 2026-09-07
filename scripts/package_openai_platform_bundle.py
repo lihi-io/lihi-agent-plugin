@@ -74,14 +74,6 @@ NEUTRAL_INTERACTIVE_AUTH = (
 )
 HOST_NEUTRAL_REWRITES = {
     Path("skills/lihi-shorten/SKILL.md"): (
-        ("while Codex adjusts", "while the assistant adjusts"),
-        ("or before Codex sends", "or before the assistant sends"),
-        (
-            "The bundled `lihi` MCP client is eager, so the host may start "
-            "OAuth",
-            "The lihi MCP connection may start OAuth",
-        ),
-        ("introduced by Codex so far", "introduced by the assistant so far"),
         (
             "the Codex OAuth recovery rules",
             "the OpenAI host OAuth recovery rules",
@@ -98,7 +90,7 @@ HOST_NEUTRAL_REWRITES = {
         ),
         (
             "For initial authentication or qualifying reauthentication, "
-            "explain that lihi access is opening. Run `codex mcp login lihi` "
+            "explain that lihi access is required or needs restoration. Run `codex mcp login lihi` "
             "once when shell execution is available. If it cannot start or "
             "complete, ask the user to run it and do not retry automatically; "
             "use **MCP settings → lihi → Authenticate** only when the command "
@@ -106,12 +98,6 @@ HOST_NEUTRAL_REWRITES = {
             "For initial authentication or qualifying reauthentication, "
             "explain that lihi access is required or needs restoration. "
             + NEUTRAL_INTERACTIVE_AUTH,
-        ),
-        (
-            "lihi 驗證已失效，我現在為你開啟 OAuth 登入；"
-            "目前尚未建立或發布任何連結。",
-            "lihi 驗證已失效。請在目前應用程式完成 lihi OAuth 驗證；"
-            "目前尚未建立或發布任何連結。",
         ),
     ),
     Path("skills/lihi-shorten/references/shortening-workflow.md"): (
@@ -144,7 +130,6 @@ HOST_NEUTRAL_REWRITES = {
             "Let Codex manage OAuth.",
             "Let the current OpenAI host manage OAuth.",
         ),
-        ("allow one Codex host-managed refresh", "allow one host-managed refresh"),
         (
             "For initial authentication or qualifying reauthentication, "
             "explain that lihi access is required or needs restoration. When "

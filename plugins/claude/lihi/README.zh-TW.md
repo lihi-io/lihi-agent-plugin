@@ -21,6 +21,8 @@ OAuth 與權杖更新由 Claude Code 管理。已有授權時，一般工具端�
 
 ## 帳號與選擇器行為
 
+群組 ID 僅供工具內部操作使用；回覆中的群組清單與確認訊息使用名稱及目前選單編號，同名或未命名群組也不顯示 ID。
+
 `account_status` 提供帳號 email、用量、方案、續訂日期、目前工作群組與目前短網址網域；一般帳號狀態會先顯示帳號 email。只有查詢可用群組清單時才使用 `group_options`。兩個切換技能都會在異動前取得最新選項，成功後直接顯示 switch 回傳的完整 AccountStatus，不追加查詢。中文網域選項將 owned 標示為「專屬網域 (owned)」、public 標示為「公用網域 (public)」，並建議選擇專屬網域、提供 `https://lihidomain.com/`，但不會自動選擇。
 
 選擇器異動可能撤銷目前 access token，但 refresh 授權仍有效；Claude Code 只在下一個 lihi 請求需要時更新。可能已送出的切換請求不會被盲目重播。

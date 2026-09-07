@@ -21,6 +21,8 @@ Claude Code owns OAuth and token refresh. With prior authorization, an ordinary 
 
 ## Account and selector behavior
 
+Group IDs are kept internal to tool operations. User-facing lists and confirmations use names and current menu numbers, including for duplicate or unnamed groups.
+
 `account_status` provides the account email, usage, plan, renewal, current work group, and current short URL domain. General status answers display the account email first. `group_options` is used only for available-group lists. Both selector skills fetch fresh options before mutation and display the complete AccountStatus returned by a successful switch without another lookup. A Chinese domain selection list distinguishes dedicated domains (`owned`) from public domains (`public`), recommends a dedicated domain, and links to `https://lihidomain.com/` without selecting an option.
 
 A selector change may revoke the current access token while leaving refresh authorization valid. Claude Code refreshes only when the next lihi request needs access. Possibly dispatched switch calls are never replayed blindly.

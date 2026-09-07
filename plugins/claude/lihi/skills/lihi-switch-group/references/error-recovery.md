@@ -6,15 +6,16 @@ Read this file completely only when `group_options` or `account_switch_group` ca
 
 - Preserve the last fully validated group snapshot, selected exact ID, whether dispatch was confirmed, and all authentication recovery budgets.
 - Treat a top-level JSON-RPC error separately from a tool result. Treat `result.isError: true` as failure even with HTTP 200.
-- Trim only surrounding transport whitespace before exact-matching a tool-error text. Do not translate, normalize, or guess future variants.
-- Enter authentication recovery only with a host/server authentication signal or evidence of a legacy token missing the required tool grant, after the tool-availability classification below. Read [the host-specific OAuth recovery rules](oauth-recovery.md) completely before authentication recovery; that reference decides whether refresh or interactive authentication is warranted.
+- Trim only surrounding transport whitespace before exact-matching a tool-error text. Classify the raw error internally; omit group IDs from displayed diagnostics. Do not translate, normalize, or guess future variants during classification.
+- Tool availability and authentication are separate. Use the observed failure to choose the branch below.
 
-## Tool availability before authentication
+## Resolve a missing tool
 
-- A tool absent from the current callable catalog is not proof of missing authorization or a missing tool grant. Use the host's tool discovery once if available and not already attempted for this failure. If the tool becomes callable, return to the interrupted flow under the preserved dispatch rules; resolving a tool does not prove authentication recovered.
-- If it remains unavailable, report that the host has not exposed the required tool and preserve the selector snapshot and dispatch state. Use available read-only MCP connection status to distinguish pending startup, a disabled/filtered tool, or a failed connection. An empty resource listing does not establish tool availability. Do not fabricate a tool call, change host configuration, or start login solely to make a tool appear.
-- A server `tools/list` omission or JSON-RPC `Unknown tool name.` alone does not establish a legacy grant: an unregistered name and a missing grant can produce the same result. Without evidence of a legacy grant or an authentication signal, report the discovery/configuration mismatch and stop without refresh or login.
-- A tool-endpoint HTTP 401 or host-level `Auth required` is an authentication signal, not proof that no prior authorization exists or that the refresh token is invalid. A failed MCP connection can also remove tools from the host catalog; classify the underlying error before choosing recovery.
+Use callable tools directly. For a missing required tool, try host tool discovery once if available and not already attempted for this failure. If resolved with no outstanding authentication failure, return directly to the interrupted normal flow under its dispatch rules. No authentication confirmation or budget is needed. If an authentication failure remains outstanding, route it to OAuth recovery; tool discovery cannot clear it.
+
+If still unavailable, inspect available read-only MCP connection status. Report pending startup, filtering, configuration, or connection failure only when supported. Empty resources, `tools/list` omissions, and `Unknown tool name.` alone establish neither missing authorization nor a legacy grant. Do not invent a call, change configuration, or start login to expose a tool.
+
+An observed authentication signal or confirmed legacy grant failure routes to [the host-specific OAuth recovery rules](oauth-recovery.md). That reference alone decides refresh versus interactive authentication. `Auth required` does not prove no prior authorization exists. If recovery returns `authentication_not_recovered`, stop with state preserved; do not resume discovery, verification, or mutation.
 
 ## Discovery failures
 
@@ -34,4 +35,3 @@ Read this file completely only when `group_options` or `account_switch_group` ca
 - Timeout, connection loss, malformed or incomplete successful output, or any possibly dispatched call is uncertain. Never replay it blindly.
 - If authentication recovery fails or cannot be confirmed, or the verification tool remains unavailable, stop with dispatch uncertainty preserved. Do not claim that the selector is unchanged or that the switch succeeded.
 - After any needed host refresh, call `group_options` once and verify whether the selected exact ID has `is_current: true`. If verified, report the current state without replaying. If not verified or still unresolved, show fresh choices and ask before any new attempt.
-- A validated `account_switch_group` AccountStatus result commits the selector and never enters this recovery file. Do not make a follow-up lookup after that success.

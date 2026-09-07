@@ -21,6 +21,7 @@ These scenarios apply to both production host bundles and their generated develo
 | B4 | Status plus available groups | Call both read-only tools; preserve a valid section if the other fails. |
 | B5 | Null status values | Render unlimited/no-expiration/dash-renewal/personal-group/unknown-domain text; `next_renewal_on:null` becomes `續訂日期：-`, and `group_name:null` becomes `目前工作群組：我的群組` without inferring a numeric ID. |
 | B6 | Non-null server values | Preserve email, `group_name`, domain, and option names exactly; do not append a personal suffix. |
+| B7 | Group ID outside `1..4294967295`, or invalid successful account output | Reject the invalid result without OAuth recovery; preserve any separately validated section. Null remains a valid personal-group ID. |
 
 ## C. Group switching
 
@@ -28,10 +29,13 @@ These scenarios apply to both production host bundles and their generated develo
 | --- | --- | --- |
 | C1 | User asks to switch groups | Fetch fresh `group_options` before presenting or resolving a target. |
 | C2 | Only one current entry exists | Report the only group and make no mutation call. |
-| C3 | Duplicate names or null names | Keep duplicate names separate by ID; apply only the documented null fallbacks. |
+| C3 | Duplicate names or null names | Keep identities internal, use `未命名工作群組` for null named-group labels, and distinguish entries with menu numbers. Never display group IDs. |
 | C4 | Valid selection | Send the exact ID, including null, to `account_switch_group`; display returned AccountStatus without lookup. |
 | C5 | Target has no domain | Treat the exact error as atomic rejection; offer another group/configuration/cancel, not domain switching under the old group. |
 | C6 | Possibly dispatched switch | Never replay blindly; verify the target ID once with fresh `group_options.is_current`. |
+| C7 | User explicitly supplied a group ID or unique name matching a fresh non-current option | Resolve internally and switch without another confirmation; never echo the ID. Bare integers use the current menu, not IDs. |
+| C8 | Current menu number happens to equal another entry's internal group ID | Select only the entry at that menu number. Without a current switch menu, show fresh choices and wait; do not interpret numbers from an earlier account list. |
+| C9 | Error or diagnostic contains an internal group ID | Classify the raw error internally, then omit the ID from the displayed diagnostic or payload excerpt. |
 
 ## D. Domain switching
 
@@ -46,6 +50,7 @@ These scenarios apply to both production host bundles and their generated develo
 | D7 | Concurrent/stale selector error | Refetch domains and require a fresh choice; old numbers are invalid. |
 | D8 | Current group unavailable | Hand off once to group switching; for explicit domain change, refetch domains after group recovery. |
 | D9 | Possibly dispatched switch | Verify once with `account_status.domain`; never blindly replay. |
+| D10 | Valid domain options include unrelated extra fields | Validate hostname and type, ignore unrelated fields, and proceed with hostname-only selection. |
 
 ## E. Automatic shortening
 
@@ -85,18 +90,24 @@ These scenarios apply to both production host bundles and their generated develo
 | G1 | Ordinary tool 401/Auth required | One host-managed refresh and at most one resumed operation. |
 | G2 | Invalid/expired/revoked/unusable refresh token | At most one interactive reauthentication; unrelated readable errors do not start login. |
 | G3 | Switch authentication recovery | OAuth reference performs authentication only; error recovery alone owns fresh discovery, verification, or a permitted retry. |
-| G4 | Second authentication failure in the incident | Stop with state preserved. |
+| G4 | Authentication fails during the resumed operation | Stop with state preserved and no new refresh/login cycle, even if a stage allowance remains unused. |
 | G5 | Codex interactive recovery | Run `codex mcp login lihi` once when available, then user-command fallback, then settings fallback only if unavailable. |
 | G6 | Claude Code interactive recovery | Open `/mcp`, select lihi, and choose **Authenticate**; never reference Codex commands. |
 | G7 | No create succeeded or may have dispatched | State in the user's language that no link was created or published; Chinese includes `目前尚未建立或發布任何連結。` |
-| G8 | Switch tool is deferred and becomes callable through host tool discovery | Resolve it once, then continue the interrupted flow under its dispatch rules; no login or claim that authentication recovered. |
-| G9 | Switch tool remains absent; connection status says pending startup or disabled/filtered | Report host tool unavailability, preserve state, and stop without login, configuration changes, or fabricated calls. Empty resources do not prove missing tools or authorization. |
-| G10 | `tools/list` omits a switch tool or a call returns `Unknown tool name.` without legacy-grant evidence | Report discovery/configuration mismatch; do not infer a legacy token, refresh, or log in. |
-| G11 | `Auth required` during switch discovery, with prior authorization unknown | Classify an authentication signal but do not assume first-time login. If the host cannot perform or confirm recovery, report that limitation without resuming. |
+| G8 | Required tool is deferred and becomes callable through host tool discovery, with no outstanding authentication failure | Return directly to the pending normal flow under its dispatch rules; no authentication confirmation, login, or consumed authentication budget. Shortening must pass local detection first. |
+| G9 | Required tool remains absent; connection status says pending startup or disabled/filtered | Report host tool unavailability, preserve state, and stop without login, configuration changes, or fabricated calls. Empty resources do not prove missing tools or authorization. |
+| G10 | `tools/list` omits a required tool or a call returns `Unknown tool name.` without legacy-grant evidence | Report discovery/configuration mismatch; do not infer a legacy token, refresh, or log in. |
+| G11 | `Auth required` with prior authorization unknown | Classify an authentication signal but do not assume first-time login. If the host cannot perform or confirm recovery, report that limitation without resuming. |
 | G12 | Switch succeeds, then a later lookup gets 401 while stored refresh credentials lack or cannot bind to their issuer | Preserve the completed switch. Report host credential-binding failure, even if accompanied by `authorization required`; do not refresh automatically, start login, change credentials, or replay the switch. |
 | G13 | Possibly dispatched switch followed by issuer-binding failure during recovery | Preserve uncertainty and selected identity; report that verification is blocked. Do not claim success, claim the selector is unchanged, or replay the mutation. |
 | G14 | Host explicitly confirms no prior authorization exists during switch recovery | Use the host-specific initial authentication action once, then let error recovery resume fresh discovery under its budget. |
 | G15 | Existing switch authorization, host confirms refresh success | Return `authentication_recovered`; the caller alone resumes fresh discovery or permitted verification/retry. Tool availability alone cannot substitute for host confirmation. |
+| G16 | Account lookup or shortening encounters issuer-binding failure | Preserve validated account sections or confirmed/uncertain creation state; stop without login, duplicate calls, or external release. |
+| G17 | Initial authentication is confirmed necessary before any creation | Explain that initial access is needed, not that authorization expired. Say login is opening only once it starts and state that no links were created or published. |
+| G18 | Switch OAuth reference returns `authentication_not_recovered` | Caller performs no resumed lookup, verification, or mutation and preserves uncertainty. |
+| G19 | Tool 401, followed by a qualifying refresh-token 401 or invalid-refresh-token error | Allow the single interactive authentication stage; do not stop merely because two HTTP errors occurred. Resume the logical operation once after confirmed recovery. |
+| G20 | Interactive authentication fails or cannot be confirmed | Stop automatic recovery; no further automatic authentication stage or resumed operation. The documented user-assisted host fallback remains within the same stage. |
+| G21 | Tool becomes callable but an earlier authentication failure remains unresolved | Tool discovery does not clear the failure; follow authentication recovery before resuming. |
 
 ## H. Static and package invariants
 

@@ -77,7 +77,9 @@ Every item requires:
 - `name`: string or `null`.
 - `is_current`: boolean.
 
-The client requires a non-empty list and exactly one current entry. Treat `id` as identity. Preserve all non-null names byte-for-byte. Only null names receive client fallbacks: null ID → `我的群組`; integer ID → `未命名工作群組（ID：<id>）`. Duplicate names remain separate entries.
+The client requires a non-empty list and exactly one current entry. Treat `id` as internal identity. Preserve all non-null names byte-for-byte. Only null names receive client fallbacks: null ID → `我的群組`; integer ID → `未命名工作群組`. Keep duplicate and unnamed entries separate with contiguous display numbers. Never include group IDs in assistant-written lists, confirmations, diagnostics, or copied tool payloads; classify raw errors before omitting IDs from displayed diagnostics.
+
+While awaiting a switch selection, a bare integer is only a number from that exact menu, never an ID or numeric group name. Without a current switch menu, fetch and present choices. Account-list numbers cannot authorize a later switch. Explicitly supplied names or IDs may be resolved against fresh options, but IDs are never offered as an input method or echoed. This presentation rule does not remove IDs from the MCP response or required selector arguments; host-rendered tool traces are outside the skill's control.
 
 ### `account_switch_group`
 
@@ -152,18 +154,20 @@ Unknown text follows generic error handling. Do not silently route a future loca
 
 ## Retry and OAuth state machine
 
-- Before switching, resolve the required tool from the host's callable catalog or available tool discovery. If unresolved, read switch error recovery before choosing any authentication action. Resource listings are not tool listings.
+- All skills use callable tools directly and available host discovery only for a missing required tool. Switch skills route failures through error recovery; account and shortening route tool unavailability or authentication signals to their recovery reference. Shortening always completes local detection first. Resource listings are not tool listings.
 - Tool absence, a server `tools/list` omission, or JSON-RPC `Unknown tool name.` alone is not evidence of missing authorization or a legacy grant. Check available read-only connection status and distinguish loading/filtering/configuration failures from an underlying authentication error. Attempt host tool discovery at most once per availability failure; do not fabricate a tool or change configuration to expose it.
 - A validated switch is never replayed or verified with another lookup.
 - A switch 401 may be retried once only when non-dispatch is conclusive; refetch options and re-resolve by stable ID or exact hostname first.
 - A possibly dispatched switch is not replayed. Verify once with `group_options.is_current` for group or `account_status.domain` for domain, then require a fresh choice if unresolved.
 - A possibly dispatched `site_create` is never replayed or converted into confirmed state.
 - Switch OAuth references recover authentication and return control without calling lihi tools. Switch error-recovery references alone own the fresh discovery, read-only verification, or permitted retry.
-- Per authentication incident, allow one host refresh, one qualifying interactive authentication, and one resumed operation. A second authentication failure stops.
+- Per authentication incident, allow one host refresh, one qualifying interactive authentication stage with its documented host fallback, and one resumed logical operation. A qualifying refresh failure may enter interactive authentication and does not count as failure of the resumed operation. Failed/unconfirmed interactive authentication or authentication failure during the resumed operation stops automatic recovery without another refresh/login cycle. Fresh switch options and the permitted verification or retry belong to the single resumed logical operation.
 - Interactive reauthentication is limited to an HTTP 401 refresh-token exchange or explicit invalid/expired/revoked/unusable refresh-token error. `invalid_grant` qualifies only in that exchange.
-- In switch recovery, initial authentication requires the host to confirm no prior authorization exists. Unknown state and `Auth required` alone do not qualify. A refreshed tool catalog also does not prove authentication recovered.
+- Initial authentication requires the host to confirm no prior authorization exists. Unknown state and `Auth required` alone do not qualify. A refreshed tool catalog also does not prove authentication recovered.
+- Tool resolution with no outstanding authentication failure returns directly to the pending normal flow, under its dispatch rules, without authentication confirmation or consuming an authentication budget. An outstanding authentication failure still requires authentication recovery; a newly available tool cannot clear it.
 - Host-managed refresh is not an agent-callable lihi tool or a login command. If the host cannot perform or confirm refresh, preserve the interrupted operation and report that recovery is unconfirmed; do not return `authentication_recovered` or start interactive login as a fallback.
 - A stored credential missing its authorization-server issuer or unable to bind to that issuer blocks host refresh. This is a host credential-binding failure, not proof that the refresh token itself is invalid. Preserve selector and dispatch state, report that host authorization-state repair is needed, and do not automatically refresh, log in, modify credentials, or resume the operation.
+- Switch OAuth recovery returns `authentication_not_recovered` when recovery is blocked or unconfirmed; the caller must not resume discovery, verification, or mutation. Account recovery preserves any separately successful lookup. Shortening recovery never calls initial authorization an expired session or announces login before it starts.
 
 Codex diagnostics such as `stored OAuth refresh credentials could not be bound to their issuer` and `OAuth refresh credentials for server lihi are missing an authorization server issuer` belong to that credential-binding branch, even when the host also says `authorization required`. A later `invalid_token` or unavailable tool catalog does not turn those diagnostics into an invalid-refresh-token response. Selector changes intentionally revoke the old access token, so this host failure can become visible immediately after a successful switch.
 

@@ -66,7 +66,7 @@ Do not pass the downloaded ZIP file itself to the marketplace command. Extract i
 
 ## Authenticate
 
-If a group or domain switch reports that a tool is unavailable, this does not by itself mean you need to sign in again. The plugin checks available connection information before deciding how to recover.
+If a tool is unavailable while checking your account, shortening copy, or switching groups or domains, this does not by itself mean you need to sign in again. The plugin checks available connection information before deciding how to recover.
 
 ### Codex
 
@@ -106,7 +106,7 @@ To switch the active work group:
 Switch my lihi work group.
 ```
 
-The plugin checks `group_options` first. An empty or inconsistent list is treated as a server anomaly, while a one-entry list reports that only one work group is available and stops. It calls `account_switch_group` only with an exact returned ID, then displays the complete updated account status without another lookup.
+The plugin checks available work groups first. An empty or inconsistent list is treated as a server anomaly, while a one-entry list reports that only one work group is available and stops. Choose a group by name or by the number in the current selection list; the plugin keeps group IDs out of its messages. It then displays the complete updated account status without another lookup.
 
 To switch the short URL domain:
 

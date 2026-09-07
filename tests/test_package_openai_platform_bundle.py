@@ -212,6 +212,9 @@ class OpenAIPlatformPackagerTests(unittest.TestCase):
                 self.assertNotIn("open `/mcp`", text.lower())
                 self.assertNotIn("https://app.lihidev.com", text)
                 self.assertNotIn("lihi-dev", text)
+                self.assertNotRegex(
+                    text, r"未命名工作群組[（(][^\n]*\bID\s*[:：]"
+                )
                 for promotional_url in self.packager.PROMOTIONAL_URLS:
                     self.assertNotIn(promotional_url, text)
 
@@ -375,8 +378,13 @@ class OpenAIPlatformPackagerTests(unittest.TestCase):
         self.addCleanup(temporary.cleanup)
         skill_path = fixture_root / "plugins/codex/lihi/skills/lihi-shorten/SKILL.md"
         content = skill_path.read_text(encoding="utf-8")
+        self.assertIn("the Codex OAuth recovery rules", content)
         skill_path.write_text(
-            content.replace("while Codex adjusts", "while Codex revises", 1),
+            content.replace(
+                "the Codex OAuth recovery rules",
+                "the Codex authentication recovery rules",
+                1,
+            ),
             encoding="utf-8",
         )
         output_dir = Path(temporary.name) / "output"

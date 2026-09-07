@@ -27,6 +27,7 @@ Append `已確認的既有對應會直接重用，不會再次建立。` only wh
 
 ## Create and validate short URLs
 
+- Use callable tools directly and host tool discovery only for a missing tool. For an unavailable tool or authentication signal, read [OAuth recovery](oauth-recovery.md) before generic business-error handling. A confirmed recovery resumes only within that reference's dispatch and retry limits.
 - Call `site_create` exactly once per fresh unique URL in detector order with exactly `{url:<long URL>}`. The server has no long-URL reuse lookup; another conversation or unrecorded call can create another permanent short URL and consume quota.
 - Prefer `structuredContent`; otherwise parse JSON from the first text block. On success require absolute HTTP(S) `short_url` and `long_url` values without user information, and require returned `long_url` to exactly equal the submitted URL.
 - Before generic business-error handling, trim surrounding whitespace from the first text message and exact-match these conclusive pre-creation failures:

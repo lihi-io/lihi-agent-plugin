@@ -113,6 +113,9 @@ class AccountPluginTests(unittest.TestCase):
                     self.assertIn("\nname: {0}\n".format(name), content)
                     self.assertIn("Always render the brand name exactly as `lihi`", content)
                     self.assertNotIn("TODO", content)
+                    self.assertNotRegex(
+                        content, r"未命名工作群組[（(][^\n]*\bID\s*[:：]"
+                    )
 
     def test_account_routing_and_account_status_shape(self):
         required = (
@@ -441,7 +444,7 @@ class AccountPluginTests(unittest.TestCase):
                     self.assertIn("refresh token is invalid, expired, revoked, or unusable", content)
                     self.assertRegex(content, r"at most one (host )?refresh|allow one .*refresh")
                     self.assertIn("one resumed", content)
-                    self.assertIn("second authentication failure", content.lower())
+                    self.assertNotIn("A second authentication failure stops.", content)
                     if host == "codex":
                         self.assertIn("codex mcp login lihi", content)
                     else:

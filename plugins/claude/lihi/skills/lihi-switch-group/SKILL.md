@@ -1,20 +1,22 @@
 ---
 name: lihi-switch-group
-description: Switch the active lihi MCP work group. Use when the user asks to switch, change, select, or move to another lihi work group, including「切換 lihi 工作群組」、「切換工作群組」or「換到另一個群組」in a lihi context, and when another lihi workflow hands off a confirmed group-unavailable error. Always fetch `group_options`, submit only an exact returned ID to `account_switch_group`, and display its AccountStatus result without a follow-up lookup.
+description: Switch the active lihi work group when requested, including「切換 lihi 工作群組」、「切換工作群組」or「換到另一個群組」. Also handle a confirmed group-unavailable handoff from another lihi workflow. Reading current or available groups belongs to `lihi-account`.
 ---
 
 # Switch the lihi work group
 
 Always render the brand name exactly as `lihi` in lowercase in every user-facing message and generated copy.
 
+Keep group IDs internal: use them only for identity matching and required MCP arguments. Never display or echo them in lists, confirmations, errors, or copied tool payloads. Use group names and snapshot-local menu numbers in user-facing output. Classify raw errors before removing any group IDs from displayed diagnostics.
+
 ## Flow
 
-1. Resolve `group_options` from the host's callable tools, using its tool discovery if needed, then call it with `{}` and validate the complete fresh snapshot.
+1. Call `group_options` with `{}` and validate the complete fresh snapshot. Use host tool discovery only if this tool is not callable.
 2. Stop without mutation when only one group exists or when the requested target is already current.
 3. Resolve an explicitly named target against the fresh snapshot. Otherwise show the current group and numbered alternatives, then wait for one valid selection or cancellation.
 4. Call `account_switch_group` once with the selected entry's exact `id` as `group_id`.
 5. On success, validate and display the returned AccountStatus directly, then complete the group-switch operation without a follow-up MCP call. For a standalone request, stop; when domain-switch error recovery invoked this skill, return control to that caller after display.
-6. If a required tool cannot be resolved, discovery or mutation fails, successful output does not validate, or dispatch is uncertain, leave the normal flow and read [the switch error recovery rules](references/error-recovery.md) completely before taking another action.
+6. For an unavailable tool, failed call, invalid result, or uncertain dispatch, read [the switch error recovery rules](references/error-recovery.md) before recovery.
 
 ## Fetch and validate current choices
 
@@ -26,15 +28,19 @@ Prefer `structuredContent`; otherwise parse the JSON object in the first text bl
 - `name`: a string or `null`.
 - `is_current`: a boolean.
 
-Treat `id` as identity. Preserve every non-null `name` byte-for-byte. Render only null names as `{id:null}` → `我的群組` or `{id:<integer>}` → `未命名工作群組（ID：<id>）`. Keep duplicate names as distinct entries.
+Treat `id` as identity. Preserve every non-null `name` byte-for-byte. Render only null names as `{id:null}` → `我的群組` or `{id:<integer>}` → `未命名工作群組`. Keep duplicate names as distinct entries.
 
 If there is exactly one entry, report `目前只有一個工作群組：<label>` and stop without mutation.
 
 ## Resolve the target
 
-For multiple entries, exclude the current entry from the selectable list and preserve returned order. Resolve a user-supplied target only by exact ID, an exact unique non-null name, or `我的群組` matching the personal entry. If it is current, report that state and stop. Otherwise display current group plus a contiguous numbered list and ask for one number or `取消`; ask even when only one alternative exists.
+For multiple entries, exclude the current entry from the selectable list and preserve returned order. Resolve an explicitly supplied name only when it uniquely identifies an entry; `我的群組` may identify the personal entry. If name and personal-label interpretations conflict, require a menu selection. An explicitly supplied group ID may be matched internally without echoing it; never offer IDs as an input method.
 
-Bind numbers only to this exact `group_options` snapshot. Invalid or ambiguous input re-displays the same list. Any refresh or new discovery invalidates every old number. A fresh target must resolve by ID, never by old number or display label.
+While awaiting a selection, a bare integer means only the displayed menu number, never a group ID or numeric group name. Without a current menu, show fresh numbered choices instead of treating a bare number as an ID. An explicitly identified group name can still be matched as a name.
+
+If the resolved target is current, report that state and stop. If it is a valid alternative, proceed without another confirmation. Otherwise display the current group and a contiguous numbered list, then ask for one number or `取消`; ask even when only one alternative exists. Repeated or unnamed labels are distinguished by menu number, never by ID.
+
+Bind numbers only to this exact `group_options` snapshot. Invalid or ambiguous input re-displays the same list. Any refresh or new discovery invalidates every old number. After a refetch, re-resolve a previously selected target by ID, never by its old number or display label.
 
 ## Switch and validate
 
