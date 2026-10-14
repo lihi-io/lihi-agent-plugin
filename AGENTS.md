@@ -106,8 +106,9 @@ AccountStatus requires a non-empty `email:string`, `group_name:string|null`, `do
 ## Release packaging and versioning
 
 CI runs Python 3.8 unit tests and parity checks. Develop-branch CI builds a
-develop marketplace for 14-day retention. SemVer tag CI builds four public
-OpenAI skill ZIPs plus one production marketplace bundle for 90-day retention.
+develop marketplace for 14-day retention. SemVer tag CI builds one portable
+OpenAI plugin ZIP, four individual skill ZIPs, and one production marketplace
+bundle for 90-day retention.
 
 The develop packager:
 
@@ -123,10 +124,18 @@ marketplaces, both host plugins, and public installation guides without
 rewriting identities or endpoints. It emits `lihi-agent-<major.minor.patch>`
 and fails rather than overwriting an existing output directory.
 
-The OpenAI Platform packager emits exactly four individual skill ZIPs. Each
-archive has one same-named top-level skill directory. It does not accept an app
-ID and does not emit a complete plugin ZIP, marketplace, manifest, MCP config,
-app config, or shared asset.
+The OpenAI Platform packager emits one portable `lihi-<version>.zip`
+with root `plugin.json`, root `mcp.json`, all four skills under `skills/`, and
+approved brand images under `assets/`. Both JSON files declare the Agent Plugins
+1.0.0 schemas. OpenAI presentation belongs in `extensions.com.openai.interface`;
+the MCP server uses `type: "streamable-http"` and declares OAuth under its own
+`extensions.com.openai.auth`, leaving optional discovery settings unspecified.
+The packager does not accept an app ID or emit a marketplace, `.app.json`, hooks,
+or legacy host manifests. It also emits four `<skill-name>-<version>.zip`
+archives, each with one same-named top-level skill directory. The individual
+skills match the staged plugin skills byte-for-byte, including detector mode.
+All five archives are validated before publication; a failed publication rolls
+back the entire artifact set. Source host bundles stay unchanged.
 
 Both checked-in production manifests must use version `0.3.2` without build metadata. A Codex cachebuster is allowed only in a generated develop bundle. Validate the Codex plugin after modifying its bundle. Reinstall only when explicitly requested; after reinstall, test from a new conversation.
 
@@ -147,5 +156,6 @@ For packaging changes, also build locally with
 `scripts/package_develop_bundle.py`, `scripts/package_production_bundle.py`,
 and `scripts/package_openai_platform_bundle.py`. Validate all host plugins,
 production/develop identity isolation, endpoint isolation, metadata aliases,
-the four skill-only OpenAI archives, and absence of removed tool fields and
+the portable OpenAI plugin archive and four individual skill archives, and
+absence of removed tool fields and
 stale policies.

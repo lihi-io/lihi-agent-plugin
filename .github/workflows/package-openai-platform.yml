@@ -14,7 +14,7 @@ concurrency:
 
 jobs:
   package:
-    name: Package ChatGPT skills and production marketplace (Python 3.8)
+    name: Package OpenAI plugin, skills, and production marketplace (Python 3.8)
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -47,7 +47,7 @@ jobs:
       - name: Check whitespace errors
         run: git diff --check "$(git hash-object -t tree /dev/null)" HEAD -- .
 
-      - name: Build OpenAI Platform skill bundles
+      - name: Build OpenAI Platform plugin and skill bundles
         run: >-
           python scripts/package_openai_platform_bundle.py
           --output-dir dist/openai-platform
@@ -69,17 +69,23 @@ jobs:
             exit 1
           fi
 
+          plugin_zip="dist/openai-platform/lihi-${package_version}.zip"
+          if [ ! -f "$plugin_zip" ]; then
+            echo "::error::Tag $RELEASE_TAG does not match the shared production manifest version."
+            exit 1
+          fi
+
           for skill_name in lihi-shorten lihi-account lihi-switch-group lihi-switch-domain; do
             skill_zip="dist/openai-platform/${skill_name}-${package_version}.zip"
             if [ ! -f "$skill_zip" ]; then
-              echo "::error::Tag $RELEASE_TAG does not match the shared production manifest version."
+              echo "::error::Missing version-matched skill ZIP: $skill_zip."
               exit 1
             fi
           done
 
           zip_count="$(find dist/openai-platform -maxdepth 1 -type f -name '*.zip' | wc -l | tr -d ' ')"
-          if [ "$zip_count" != "4" ]; then
-            echo "::error::Expected four OpenAI skill ZIPs, found $zip_count."
+          if [ "$zip_count" != "5" ]; then
+            echo "::error::Expected one plugin and four skill ZIPs, found $zip_count."
             exit 1
           fi
 
@@ -89,10 +95,10 @@ jobs:
             exit 1
           fi
 
-      - name: Upload OpenAI Platform skill bundles
+      - name: Upload OpenAI Platform plugin and skill bundles
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
-          name: lihi-openai-skills-${{ github.ref_name }}
+          name: lihi-openai-bundles-${{ github.ref_name }}
           path: dist/openai-platform/*.zip
           if-no-files-found: error
           retention-days: 90

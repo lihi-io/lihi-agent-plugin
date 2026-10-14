@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build public lihi OpenAI Platform skill ZIPs without changing sources."""
+"""Build the portable lihi plugin ZIP and four individual skill ZIPs."""
 
 from __future__ import annotations
 
@@ -27,6 +27,16 @@ CODEX_MANIFEST = CODEX_PLUGIN_ROOT / ".codex-plugin/plugin.json"
 CLAUDE_MANIFEST = Path("plugins/claude/lihi/.claude-plugin/plugin.json")
 SOURCE_MANIFESTS = (CODEX_MANIFEST, CLAUDE_MANIFEST)
 SOURCE_SKILLS_ROOT = CODEX_PLUGIN_ROOT / "skills"
+SOURCE_ASSETS_ROOT = Path("packaging/openai-platform/assets")
+ASSET_FILES = ("composer-icon.png", "logo.png")
+PLUGIN_SCHEMA = "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json"
+MCP_SCHEMA = "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json"
+PLUGIN_DESCRIPTION = (
+    "Access lihi account status, group and domain switching, and automatic "
+    "URL shortening through one OAuth MCP connection."
+)
+PLUGIN_SHORT_DESCRIPTION = "Short URLs and account tools"
+PLUGIN_SUPPORT_URL = "https://lihistatus.com/contact"
 
 PROMOTIONAL_URLS = (
     "https://knowledge.lihi.io/pricing",
@@ -39,6 +49,8 @@ SKILLS = (
     "lihi-switch-group",
     "lihi-switch-domain",
 )
+ARTIFACT_KEYS = (PLUGIN_NAME,) + SKILLS
+
 SKILL_FILES = {
     "lihi-shorten": (
         Path("SKILL.md"),
@@ -236,6 +248,7 @@ MAX_ARCHIVE_MEMBER_SIZE = 100 * 1024 * 1024
 MAX_ARCHIVE_PATH_SEGMENTS = 20
 MAX_ARCHIVE_PATH_BYTES = 1024
 ZIP_TIMESTAMP = (1980, 1, 1, 0, 0, 0)
+DETECTOR_ARCHIVE_PATH = "skills/lihi-shorten/scripts/detect_urls.py"
 
 
 class PackagingError(RuntimeError):
@@ -319,19 +332,17 @@ def expected_source_skill_files(skill_name: str) -> Set[Path]:
     return set(SKILL_FILES[skill_name])
 
 
-def expected_staged_skill_files() -> Set[str]:
-    names = set()
-    for skill_name in SKILLS:
-        for relative_path in SKILL_FILES[skill_name]:
-            names.add(
-                (Path("skills") / skill_name / relative_path).as_posix()
-            )
-    return names
+def expected_archive_files() -> Set[str]:
+    return {
+        (Path("skills") / skill_name / relative_path).as_posix()
+        for skill_name in SKILLS
+        for relative_path in SKILL_FILES[skill_name]
+    } | {"plugin.json", "mcp.json"} | {
+        "assets/" + name for name in ASSET_FILES
+    }
 
 
 def expected_skill_archive_files(skill_name: str) -> Set[str]:
-    if skill_name not in SKILL_FILES:
-        raise PackagingError("Unknown skill archive: {0}".format(skill_name))
     return {
         (Path(skill_name) / relative_path).as_posix()
         for relative_path in SKILL_FILES[skill_name]
@@ -340,8 +351,7 @@ def expected_skill_archive_files(skill_name: str) -> Set[str]:
 
 def public_artifact_filenames(version: str) -> Dict[str, str]:
     return {
-        skill_name: "{0}-{1}.zip".format(skill_name, version)
-        for skill_name in SKILLS
+        key: "{0}-{1}.zip".format(key, version) for key in ARTIFACT_KEYS
     }
 
 
@@ -361,8 +371,12 @@ def validate_source_bundle(repo_root: Path) -> str:
     if not isinstance(servers, dict) or list(servers) != [PLUGIN_NAME]:
         raise PackagingError("Expected one production lihi MCP server in {0}".format(mcp_path))
     server = servers[PLUGIN_NAME]
-    if not isinstance(server, dict) or server.get("url") != PRODUCTION_ENDPOINT:
-        raise PackagingError("Source MCP server must use {0}".format(PRODUCTION_ENDPOINT))
+    if server != {
+        "type": "http", "url": PRODUCTION_ENDPOINT, "auth": "oauth"
+    }:
+        raise PackagingError(
+            "Source MCP server must use production HTTPS and host-managed OAuth"
+        )
 
     skills_root = repo_root / SOURCE_SKILLS_ROOT
     if not skills_root.is_dir() or skills_root.is_symlink():
@@ -608,16 +622,17 @@ def validate_brand_casing(content: str, path: Path) -> None:
             )
 
 
-def validate_staging(repo_root: Path, staging_root: Path) -> None:
+def validate_staging(repo_root: Path, staging_root: Path, version: str) -> None:
     actual_files = {path.as_posix() for path in regular_files(staging_root)}
-    expected_files = expected_staged_skill_files()
+    expected_files = expected_archive_files()
     if actual_files != expected_files:
         raise PackagingError(
-            "Staged skill files differ from the allowlist: expected {0!r}, got {1!r}".format(
+            "Staged plugin files differ from the allowlist: expected {0!r}, got {1!r}".format(
                 tuple(sorted(expected_files)), tuple(sorted(actual_files))
             )
         )
 
+    validate_plugin_metadata(staging_root, version)
     identities = set()
     for skill_name in SKILLS:
         skill_root = staging_root / "skills" / skill_name
@@ -670,9 +685,103 @@ def validate_staging(repo_root: Path, staging_root: Path) -> None:
             raise PackagingError("Host-specific OAuth action found in OpenAI package: {0}".format(path))
 
 
+def portable_manifest(repo_root: Path, version: str) -> dict:
+    """Adapt approved production metadata without copying host configuration."""
+    source = read_json(repo_root / CODEX_MANIFEST)
+    manifest = {
+        "$schema": PLUGIN_SCHEMA,
+        "name": PLUGIN_NAME,
+        "version": version,
+        "description": PLUGIN_DESCRIPTION,
+    }
+    for key in ("author", "homepage", "repository", "license", "keywords"):
+        if key in source:
+            manifest[key] = source[key]
+    interface = source.get("interface")
+    if not isinstance(interface, dict):
+        raise PackagingError("Source plugin interface must be an object")
+    interface = dict(interface)
+    interface.update({
+        "shortDescription": PLUGIN_SHORT_DESCRIPTION,
+        "supportURL": PLUGIN_SUPPORT_URL,
+        "composerIcon": "./assets/composer-icon.png",
+        "logo": "./assets/logo.png",
+    })
+    manifest["extensions"] = {"com.openai": {"interface": interface}}
+    return manifest
+
+
+def portable_mcp_config() -> dict:
+    """Use portable transport and OAuth discovery; never package credentials."""
+    return {
+        "$schema": MCP_SCHEMA,
+        "mcpServers": {
+            PLUGIN_NAME: {
+                "type": "streamable-http",
+                "url": PRODUCTION_ENDPOINT,
+                "extensions": {"com.openai": {"auth": {"type": "oauth"}}},
+            }
+        },
+    }
+
+
+def write_json(path: Path, value: dict) -> None:
+    try:
+        path.write_text(
+            json.dumps(value, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        path.chmod(0o644)
+    except OSError as exc:
+        raise PackagingError("Cannot write package metadata {0}: {1}".format(path, exc))
+
+
+def validate_plugin_metadata(staging_root: Path, version: str) -> None:
+    manifest_path = staging_root / "plugin.json"
+    manifest = read_json(manifest_path)
+    allowed_fields = {
+        "$schema", "name", "version", "description", "author", "homepage",
+        "repository", "license", "keywords", "extensions",
+    }
+    if (
+        set(manifest) - allowed_fields
+        or manifest.get("$schema") != PLUGIN_SCHEMA
+        or manifest.get("name") != PLUGIN_NAME
+        or manifest.get("version") != version
+        or manifest.get("description") != PLUGIN_DESCRIPTION
+    ):
+        raise PackagingError("Invalid portable plugin manifest")
+    extension = manifest.get("extensions", {}).get("com.openai", {})
+    if set(extension) != {"interface"}:
+        raise PackagingError("Public package must not declare app mappings or hooks")
+    interface = extension["interface"]
+    if interface.get("supportURL") != PLUGIN_SUPPORT_URL:
+        raise PackagingError("Missing or invalid official support URL")
+    for field, limit in (
+        ("displayName", 30), ("shortDescription", 30),
+        ("longDescription", 4000), ("developerName", 80), ("category", 80),
+    ):
+        value = interface.get(field)
+        if (
+            not isinstance(value, str) or not value.strip() or len(value) > limit
+            or has_unsupported_control(value, allow_newline=field == "longDescription")
+        ):
+            raise PackagingError("Invalid plugin interface field: {0}".format(field))
+    for field, filename in (("composerIcon", "composer-icon.png"), ("logo", "logo.png")):
+        if interface.get(field) != "./assets/" + filename:
+            raise PackagingError("Invalid packaged asset path: {0}".format(field))
+        path = staging_root / "assets" / filename
+        data = path.read_bytes()
+        if not data.startswith(b"\x89PNG\r\n\x1a\n"):
+            raise PackagingError("Required asset is not a PNG: {0}".format(path))
+    if read_json(staging_root / "mcp.json") != portable_mcp_config():
+        raise PackagingError("Invalid portable production MCP configuration")
+
+
 def prepare_staging(
     repo_root: Path,
     staging_root: Path,
+    version: str,
 ) -> None:
     for skill_name in SKILLS:
         for relative_path in SKILL_FILES[skill_name]:
@@ -688,6 +797,15 @@ def prepare_staging(
             )
 
     apply_host_neutral_rewrites(staging_root)
+    for filename in ASSET_FILES:
+        copy_regular_file(
+            repo_root / SOURCE_ASSETS_ROOT / filename,
+            staging_root / "assets" / filename,
+        )
+    write_json(
+        staging_root / "plugin.json", portable_manifest(repo_root, version)
+    )
+    write_json(staging_root / "mcp.json", portable_mcp_config())
 
 
 def validate_archive_member_name(name: str) -> str:
@@ -710,11 +828,11 @@ def validate_archive_member_name(name: str) -> str:
     return unicodedata.normalize("NFKC", name).casefold()
 
 
-def write_deterministic_zip(staging_root: Path, output_path: Path) -> None:
-    paths = sorted(
-        (path for path in staging_root.rglob("*") if path.is_file()),
-        key=lambda path: path.relative_to(staging_root).as_posix(),
-    )
+def write_deterministic_zip(
+    staging_root: Path, output_path: Path, archive_prefix: str = ""
+) -> None:
+    """Archive validated files, optionally under a named skill directory."""
+    paths = sorted(regular_files(staging_root), key=lambda path: path.as_posix())
     try:
         with zipfile.ZipFile(
             str(output_path),
@@ -723,18 +841,14 @@ def write_deterministic_zip(staging_root: Path, output_path: Path) -> None:
             compresslevel=9,
             allowZip64=True,
         ) as archive:
-            for path in paths:
-                name = path.relative_to(staging_root).as_posix()
+            for relative_path in paths:
+                path = staging_root / relative_path
+                name = (Path(archive_prefix) / relative_path).as_posix()
                 validate_archive_member_name(name)
-                permissions = (
-                    0o755
-                    if name
-                    in {
-                        "skills/lihi-shorten/scripts/detect_urls.py",
-                        "lihi-shorten/scripts/detect_urls.py",
-                    }
-                    else 0o644
-                )
+                permissions = 0o755 if name in {
+                    DETECTOR_ARCHIVE_PATH,
+                    "lihi-shorten/scripts/detect_urls.py",
+                } else 0o644
                 info = zipfile.ZipInfo(name, date_time=ZIP_TIMESTAMP)
                 info.create_system = 3
                 info.compress_type = zipfile.ZIP_DEFLATED
@@ -801,8 +915,7 @@ def validate_archive(path: Path, expected_names: Set[str]) -> None:
                 raise PackagingError("ZIP member cannot be read: {0}".format(corrupted))
 
             for detector_name in (
-                "skills/lihi-shorten/scripts/detect_urls.py",
-                "lihi-shorten/scripts/detect_urls.py",
+                DETECTOR_ARCHIVE_PATH, "lihi-shorten/scripts/detect_urls.py"
             ):
                 if detector_name not in expected_names:
                     continue
@@ -849,7 +962,7 @@ def publish_public_zip_artifacts(
     temporary_zips: Mapping[str, Path],
     artifact_names: Mapping[str, str],
 ) -> None:
-    artifact_keys = SKILLS
+    artifact_keys = ARTIFACT_KEYS
     if set(temporary_zips) != set(artifact_keys) or set(artifact_names) != set(
         artifact_keys
     ):
@@ -944,113 +1057,64 @@ def publish_public_zip_artifacts(
 
 
 def build_bundle(
-    repo_root: Path,
-    output_dir: Path,
+    repo_root: Path, output_dir: Path
 ) -> Tuple[Dict[str, Path], str, Dict[str, str]]:
     repo_root = repo_root.resolve()
     output_dir = output_dir.resolve()
     version = validate_source_bundle(repo_root)
+    artifact_names = public_artifact_filenames(version)
 
     with tempfile.TemporaryDirectory(prefix="lihi-openai-platform-") as temporary:
-        temporary_root = Path(temporary)
-        staging_root = temporary_root / "skills-staging"
-        staging_root.mkdir(parents=True)
-        prepare_staging(repo_root, staging_root)
-        validate_staging(repo_root, staging_root)
-
-        skill_staging_roots = {}
-        for skill_name in SKILLS:
-            skill_root = temporary_root / "skills" / skill_name
-            packaged_skill_root = skill_root / skill_name
-            packaged_skill_root.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copytree(
-                str(staging_root / "skills" / skill_name),
-                str(packaged_skill_root),
-                copy_function=shutil.copy2,
-            )
-            actual_names = {
-                path.relative_to(skill_root).as_posix()
-                for path in skill_root.rglob("*")
-                if path.is_file()
-            }
-            expected_names = expected_skill_archive_files(skill_name)
-            if actual_names != expected_names:
-                raise PackagingError(
-                    "Individual skill staging differs from the allowlist for "
-                    "{0}: expected {1!r}, got {2!r}".format(
-                        skill_name,
-                        tuple(sorted(expected_names)),
-                        tuple(sorted(actual_names)),
-                    )
-                )
-            skill_staging_roots[skill_name] = skill_root
-
+        staging_root = Path(temporary)
+        prepare_staging(repo_root, staging_root, version)
+        validate_staging(repo_root, staging_root, version)
+        temporary_zips = {}
+        digests = {}
         try:
             output_dir.mkdir(parents=True, exist_ok=True)
-        except OSError as exc:
-            raise PackagingError("Cannot create output directory {0}: {1}".format(output_dir, exc))
-        artifact_names = public_artifact_filenames(version)
-        expected_names_by_artifact = {
-            skill_name: expected_skill_archive_files(skill_name)
-            for skill_name in SKILLS
-        }
-        temporary_zips = {}
-        try:
-            for artifact_key in SKILLS:
+            for key in ARTIFACT_KEYS:
                 with tempfile.NamedTemporaryFile(
-                    prefix=".{0}-".format(artifact_key),
-                    suffix=".tmp",
-                    dir=str(output_dir),
-                    delete=False,
+                    prefix=".{0}-".format(key), suffix=".tmp",
+                    dir=str(output_dir), delete=False,
                 ) as stream:
                     temporary_zip = Path(stream.name)
-                temporary_zips[artifact_key] = temporary_zip
-                write_deterministic_zip(
-                    skill_staging_roots[artifact_key],
-                    temporary_zip,
-                )
-                validate_archive(
-                    temporary_zip,
-                    expected_names_by_artifact[artifact_key],
-                )
+                temporary_zips[key] = temporary_zip
+                if key == PLUGIN_NAME:
+                    archive_root = staging_root
+                    archive_prefix = ""
+                    expected_names = expected_archive_files()
+                else:
+                    archive_root = staging_root / "skills" / key
+                    archive_prefix = key
+                    expected_names = expected_skill_archive_files(key)
+                write_deterministic_zip(archive_root, temporary_zip, archive_prefix)
+                validate_archive(temporary_zip, expected_names)
                 temporary_zip.chmod(0o644)
+                digests[key] = sha256_file(temporary_zip)
 
-            publish_public_zip_artifacts(
-                output_dir,
-                temporary_zips,
-                artifact_names,
-            )
+            publish_public_zip_artifacts(output_dir, temporary_zips, artifact_names)
         except OSError as exc:
             raise PackagingError(
                 "Cannot publish OpenAI Platform ZIP artifacts: {0}".format(exc)
             )
         finally:
-            for temporary_zip in tuple(temporary_zips.values()):
+            for temporary_zip in temporary_zips.values():
                 try:
                     temporary_zip.unlink()
                 except FileNotFoundError:
                     pass
                 except OSError as exc:
                     raise PackagingError(
-                        "Cannot remove temporary ZIP {0}: {1}".format(
-                            temporary_zip, exc
-                        )
+                        "Cannot remove temporary ZIP {0}: {1}".format(temporary_zip, exc)
                     )
 
-    targets = {
-        skill_name: output_dir / artifact_names[skill_name]
-        for skill_name in SKILLS
-    }
-    digests = {
-        skill_name: sha256_file(target)
-        for skill_name, target in targets.items()
-    }
+    targets = {key: output_dir / artifact_names[key] for key in ARTIFACT_KEYS}
     return targets, version, digests
 
 
 def parse_args(argv: Sequence[str] = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Build the four public lihi OpenAI Platform skill ZIPs."
+        description="Build the portable lihi plugin ZIP and four individual skill ZIPs."
     )
     parser.add_argument(
         "--output-dir",
@@ -1069,14 +1133,11 @@ def main(argv: Sequence[str] = None) -> int:
     except PackagingError as exc:
         print("error: {0}".format(exc), file=sys.stderr)
         return 1
-    for skill_name in SKILLS:
-        print(
-            "Built OpenAI skill bundle {0}: {1}".format(
-                skill_name,
-                targets[skill_name],
-            )
-        )
-        print("SHA-256 ({0}): {1}".format(skill_name, digests[skill_name]))
+    print("Built OpenAI Platform plugin bundle: {0}".format(targets[PLUGIN_NAME]))
+    for key in ARTIFACT_KEYS:
+        if key != PLUGIN_NAME:
+            print("Built OpenAI skill bundle {0}: {1}".format(key, targets[key]))
+        print("SHA-256 ({0}): {1}".format(key, digests[key]))
     print("Version: {0}".format(version))
     return 0
 
