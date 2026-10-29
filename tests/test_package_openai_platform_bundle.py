@@ -1,7 +1,6 @@
 import hashlib
 import importlib.util
 import json
-import os
 import shutil
 import stat
 import subprocess
@@ -10,6 +9,7 @@ import tempfile
 import unittest
 import zipfile
 from pathlib import Path
+from unittest import mock
 
 
 PRODUCTION_ENDPOINT = "https://app.lihi.io/mcp/v1/tools"
@@ -59,6 +59,10 @@ def copy_fixture(source_root, destination):
         destination / "plugins/codex/lihi",
         ignore=shutil.ignore_patterns("__pycache__", "*.pyc", "*.pyo"),
     )
+    shutil.copytree(
+        source_root / "packaging/openai-platform/assets",
+        destination / "packaging/openai-platform/assets",
+    )
     claude_manifest = source_root / "plugins/claude/lihi/.claude-plugin/plugin.json"
     claude_target = destination / "plugins/claude/lihi/.claude-plugin/plugin.json"
     claude_target.parent.mkdir(parents=True)
@@ -93,6 +97,7 @@ class OpenAIPlatformPackagerTests(unittest.TestCase):
         copy_fixture(cls.repo_root, cls.fixture_root)
         cls.source_paths = (
             Path("plugins"),
+            Path("packaging"),
             Path("scripts/package_openai_platform_bundle.py"),
         )
         cls.source_hash_before = tree_hash(cls.fixture_root, cls.source_paths)
@@ -100,11 +105,12 @@ class OpenAIPlatformPackagerTests(unittest.TestCase):
         cls.process = run_packager(cls.fixture_root, cls.output_dir)
         cls.source_hash_after = tree_hash(cls.fixture_root, cls.source_paths)
         cls.version = "0.3.2"
+        cls.bundle = cls.output_dir / "lihi-{0}.zip".format(cls.version)
         cls.skill_bundles = {
-            skill_name: cls.output_dir
-            / "{0}-{1}.zip".format(skill_name, cls.version)
-            for skill_name in SKILLS
+            name: cls.output_dir / "{0}-{1}.zip".format(name, cls.version)
+            for name in SKILLS
         }
+        cls.bundles = {"lihi": cls.bundle, **cls.skill_bundles}
 
     @classmethod
     def tearDownClass(cls):
@@ -124,23 +130,19 @@ class OpenAIPlatformPackagerTests(unittest.TestCase):
             in {".json", ".md", ".yaml", ".yml"}
         )
 
-    def test_subprocess_builds_only_four_skills_without_modifying_source(self):
+    def test_subprocess_builds_plugin_and_four_skills_without_modifying_source(self):
         self.assertEqual(self.process.returncode, 0, self.process.stderr)
         self.assertIn("Version: " + self.version, self.process.stdout)
-        self.assertNotIn("Built OpenAI Platform bundle", self.process.stdout)
-        self.assertNotIn("OpenAI Developer", self.process.stdout)
+        self.assertIn("Built OpenAI Platform plugin bundle:", self.process.stdout)
         self.assertEqual(self.source_hash_before, self.source_hash_after)
-        self.assertEqual(
-            sorted(path.name for path in self.output_dir.glob("*.zip")),
-            sorted(path.name for path in self.skill_bundles.values()),
-        )
-        for skill_name, bundle in self.skill_bundles.items():
-            self.assertTrue(bundle.is_file())
+        self.assertEqual(set(self.output_dir.iterdir()), set(self.bundles.values()))
+        for key, bundle in self.bundles.items():
             self.assertIn(
-                "Built OpenAI skill bundle {0}:".format(skill_name),
+                "SHA-256 ({0}): {1}".format(
+                    key, hashlib.sha256(bundle.read_bytes()).hexdigest()
+                ),
                 self.process.stdout,
             )
-            self.assertIn("SHA-256 ({0}):".format(skill_name), self.process.stdout)
 
     def test_version_helpers_enforce_shared_semver_core(self):
         self.assertEqual(
@@ -152,42 +154,101 @@ class OpenAIPlatformPackagerTests(unittest.TestCase):
         with self.assertRaises(self.packager.PackagingError):
             self.packager.semantic_version_core("0.3", Path("manifest.json"))
 
-    def test_each_zip_has_one_named_skill_root_and_exact_allowlist(self):
-        for skill_name, bundle in self.skill_bundles.items():
-            with self.subTest(skill=skill_name), zipfile.ZipFile(
-                str(bundle), "r"
-            ) as archive:
-                names = archive.namelist()
+    def test_zip_has_one_plugin_root_and_exact_allowlist(self):
+        with zipfile.ZipFile(str(self.bundle), "r") as archive:
+            names = archive.namelist()
+            self.assertEqual(set(names), self.packager.expected_archive_files())
+            self.assertEqual(len(names), len(set(names)))
+            self.assertEqual(
+                {name.split("/")[0] for name in names},
+                {"plugin.json", "mcp.json", "skills", "assets"},
+            )
+            for skill_name in SKILLS:
+                self.assertIn("skills/" + skill_name + "/SKILL.md", names)
+            self.assertFalse(any("\\" in name for name in names))
+            self.assertFalse(any(".." in name.split("/") for name in names))
+            self.assertFalse(any("__pycache__" in name for name in names))
+            self.assertFalse(any(name.endswith(".pyc") for name in names))
+            self.assertFalse(any(".codex-plugin" in name for name in names))
+            self.assertFalse(any(name.endswith(".app.json") for name in names))
+            self.assertFalse(any(name.endswith(".mcp.json") for name in names))
+            self.assertLessEqual(self.bundle.stat().st_size, 100 * 1000 * 1000)
+            self.assertLessEqual(len(names), 5000)
+            self.assertLessEqual(
+                sum(info.file_size for info in archive.infolist()),
+                512 * 1024 * 1024,
+            )
+
+    def test_individual_skill_zips_match_the_platform_skills_exactly(self):
+        with zipfile.ZipFile(str(self.bundle), "r") as plugin:
+            for skill_name, bundle in self.skill_bundles.items():
+                with self.subTest(skill=skill_name), zipfile.ZipFile(str(bundle), "r") as skill:
+                    expected = {
+                        (Path(skill_name) / path).as_posix()
+                        for path in self.packager.SKILL_FILES[skill_name]
+                    }
+                    self.assertEqual(set(skill.namelist()), expected)
+                    self.assertEqual(len(skill.namelist()), len(expected))
+                    self.assertEqual(
+                        {name.split("/")[0] for name in skill.namelist()}, {skill_name}
+                    )
+                    self.assertIsNone(skill.testzip())
+                    for name in expected:
+                        self.assertEqual(skill.read(name), plugin.read("skills/" + name))
+                        self.assertEqual(
+                            skill.getinfo(name).external_attr,
+                            plugin.getinfo("skills/" + name).external_attr,
+                        )
+
+    def test_portable_manifest_and_oauth_mcp_configuration(self):
+        with zipfile.ZipFile(str(self.bundle), "r") as archive:
+            manifest = json.loads(archive.read("plugin.json"))
+            self.assertEqual(
+                manifest["$schema"],
+                "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+            )
+            self.assertEqual(manifest["name"], "lihi")
+            self.assertEqual(manifest["version"], self.version)
+            self.assertNotIn("skills", manifest)
+            self.assertNotIn("mcpServers", manifest)
+            self.assertNotIn("interface", manifest)
+            self.assertEqual(set(manifest["extensions"]), {"com.openai"})
+            extension = manifest["extensions"]["com.openai"]
+            self.assertEqual(set(extension), {"interface"})
+            interface = extension["interface"]
+            self.assertEqual(interface["displayName"], "lihi")
+            self.assertEqual(interface["supportURL"], "https://lihistatus.com/contact")
+            self.assertLessEqual(len(interface["shortDescription"]), 30)
+            self.assertEqual(interface["composerIcon"], "./assets/composer-icon.png")
+            self.assertEqual(interface["logo"], "./assets/logo.png")
+            self.assertEqual(manifest["author"]["name"], "lihi")
+            config = json.loads(archive.read("mcp.json"))
+            self.assertEqual(
+                config["$schema"],
+                "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json",
+            )
+            self.assertEqual(config["mcpServers"], {
+                "lihi": {
+                    "type": "streamable-http",
+                    "url": PRODUCTION_ENDPOINT,
+                    "extensions": {"com.openai": {"auth": {"type": "oauth"}}},
+                }
+            })
+
+    def test_brand_assets_are_packaged_byte_identically(self):
+        with zipfile.ZipFile(str(self.bundle), "r") as archive:
+            for name in ("composer-icon.png", "logo.png"):
                 self.assertEqual(
-                    set(names),
-                    self.packager.expected_skill_archive_files(skill_name),
-                )
-                self.assertEqual(len(names), len(set(names)))
-                self.assertTrue(
-                    all(name.startswith(skill_name + "/") for name in names)
-                )
-                self.assertIn(skill_name + "/SKILL.md", names)
-                self.assertFalse(any("\\" in name for name in names))
-                self.assertFalse(any(".." in name.split("/") for name in names))
-                self.assertFalse(any("__pycache__" in name for name in names))
-                self.assertFalse(any(name.endswith(".pyc") for name in names))
-                self.assertFalse(any(name.startswith("assets/") for name in names))
-                self.assertFalse(any(".codex-plugin" in name for name in names))
-                self.assertFalse(any(name.endswith(".app.json") for name in names))
-                self.assertFalse(any(name.endswith(".mcp.json") for name in names))
-                self.assertLessEqual(bundle.stat().st_size, 100 * 1000 * 1000)
-                self.assertLessEqual(len(names), 5000)
-                self.assertLessEqual(
-                    sum(info.file_size for info in archive.infolist()),
-                    512 * 1024 * 1024,
+                    archive.read("assets/" + name),
+                    (self.fixture_root / "packaging/openai-platform/assets" / name).read_bytes(),
                 )
 
     def test_skills_are_valid_host_neutral_and_keep_production_dependency(self):
-        for skill_name, bundle in self.skill_bundles.items():
+        for skill_name in SKILLS:
             with self.subTest(skill=skill_name), zipfile.ZipFile(
-                str(bundle), "r"
+                str(self.bundle), "r"
             ) as archive:
-                skill_path = skill_name + "/SKILL.md"
+                skill_path = "skills/" + skill_name + "/SKILL.md"
                 skill_content = archive.read(skill_path).decode("utf-8")
                 metadata = self.packager.parse_skill_frontmatter(
                     skill_content, Path(skill_path)
@@ -199,7 +260,7 @@ class OpenAIPlatformPackagerTests(unittest.TestCase):
                     self.assertIn("`email`: a non-empty string", skill_content)
                     self.assertIn("帳號 Email：<email>", skill_content)
 
-                agent_path = skill_name + "/agents/openai.yaml"
+                agent_path = "skills/" + skill_name + "/agents/openai.yaml"
                 agent_text = archive.read(agent_path).decode("utf-8")
                 self.assertIn("$" + skill_name, agent_text)
                 self.assertIn('value: "lihi"', agent_text)
@@ -216,14 +277,12 @@ class OpenAIPlatformPackagerTests(unittest.TestCase):
                     self.assertNotIn(promotional_url, text)
 
     def test_promotional_link_sentences_are_removed(self):
-        markdown = []
-        for bundle in self.skill_bundles.values():
-            with zipfile.ZipFile(str(bundle), "r") as archive:
-                markdown.extend(
-                    archive.read(info).decode("utf-8")
-                    for info in archive.infolist()
-                    if info.filename.endswith(".md")
-                )
+        with zipfile.ZipFile(str(self.bundle), "r") as archive:
+            markdown = [
+                archive.read(info).decode("utf-8")
+                for info in archive.infolist()
+                if info.filename.endswith(".md")
+            ]
         combined = "\n".join(markdown)
         self.assertNotIn("訂閱方案說明：", combined)
         self.assertNotIn("專屬網域說明：", combined)
@@ -231,10 +290,10 @@ class OpenAIPlatformPackagerTests(unittest.TestCase):
         self.assertIn("explain the account limit", combined)
 
     def test_rewrites_are_applied_only_to_declared_files(self):
-        for skill_name, bundle in self.skill_bundles.items():
-            with zipfile.ZipFile(str(bundle), "r") as archive:
+        for skill_name in SKILLS:
+            with zipfile.ZipFile(str(self.bundle), "r") as archive:
                 for relative_path in self.packager.SKILL_FILES[skill_name]:
-                    archive_path = (Path(skill_name) / relative_path).as_posix()
+                    archive_path = (Path("skills") / skill_name / relative_path).as_posix()
                     packaged = archive.read(archive_path)
                     source = (
                         self.fixture_root
@@ -249,26 +308,36 @@ class OpenAIPlatformPackagerTests(unittest.TestCase):
                         self.assertEqual(packaged, source, rewrite_path)
 
     def test_detector_bytes_and_executable_mode_are_preserved(self):
-        bundle = self.skill_bundles["lihi-shorten"]
-        name = "lihi-shorten/scripts/detect_urls.py"
+        name = "skills/lihi-shorten/scripts/detect_urls.py"
         source = (
             self.fixture_root
             / "plugins/codex/lihi/skills/lihi-shorten/scripts/detect_urls.py"
         )
-        with zipfile.ZipFile(str(bundle), "r") as archive:
+        with zipfile.ZipFile(str(self.bundle), "r") as archive:
             self.assertEqual(archive.read(name), source.read_bytes())
             mode = archive.getinfo(name).external_attr >> 16
             self.assertEqual(stat.S_IFMT(mode), stat.S_IFREG)
             self.assertTrue(mode & 0o111)
 
-    def test_build_does_not_require_listing_assets(self):
+    def test_missing_listing_asset_fails_before_output(self):
         temporary, fixture_root = self.fresh_fixture()
         self.addCleanup(temporary.cleanup)
-        self.assertFalse((fixture_root / "packaging").exists())
+        (fixture_root / "packaging/openai-platform/assets/logo.png").unlink()
         output_dir = Path(temporary.name) / "output"
         process = run_packager(fixture_root, output_dir)
-        self.assertEqual(process.returncode, 0, process.stderr)
-        self.assertEqual(len(list(output_dir.glob("*.zip"))), 4)
+        self.assertNotEqual(process.returncode, 0)
+        self.assertIn("Required regular file is missing", process.stderr)
+        self.assertFalse(output_dir.exists())
+
+    def test_invalid_listing_asset_fails_before_output(self):
+        temporary, fixture_root = self.fresh_fixture()
+        self.addCleanup(temporary.cleanup)
+        (fixture_root / "packaging/openai-platform/assets/logo.png").write_bytes(b"bad")
+        output_dir = Path(temporary.name) / "output"
+        process = run_packager(fixture_root, output_dir)
+        self.assertNotEqual(process.returncode, 0)
+        self.assertIn("Required asset is not a PNG", process.stderr)
+        self.assertFalse(output_dir.exists())
 
     def test_app_id_option_is_removed(self):
         temporary, fixture_root = self.fresh_fixture()
@@ -287,10 +356,10 @@ class OpenAIPlatformPackagerTests(unittest.TestCase):
         second_output = Path(self.temporary.name) / "second-output"
         second = run_packager(self.fixture_root, second_output)
         self.assertEqual(second.returncode, 0, second.stderr)
-        for first_bundle in self.skill_bundles.values():
-            second_bundle = second_output / first_bundle.name
-            with self.subTest(bundle=first_bundle.name):
-                self.assertEqual(first_bundle.read_bytes(), second_bundle.read_bytes())
+        for bundle in self.bundles.values():
+            with self.subTest(bundle=bundle.name):
+                second_bundle = second_output / bundle.name
+                self.assertEqual(bundle.read_bytes(), second_bundle.read_bytes())
 
     def test_version_mismatch_fails_before_output(self):
         temporary, fixture_root = self.fresh_fixture()
@@ -397,7 +466,7 @@ class OpenAIPlatformPackagerTests(unittest.TestCase):
         artifacts = {
             path.name: path.read_bytes() for path in output_dir.glob("*.zip")
         }
-        self.assertEqual(len(artifacts), 4)
+        self.assertEqual(len(artifacts), 5)
         metadata_path = (
             fixture_root
             / "plugins/codex/lihi/skills/lihi-account/agents/openai.yaml"
@@ -411,44 +480,92 @@ class OpenAIPlatformPackagerTests(unittest.TestCase):
         )
         self.assertFalse(any(output_dir.glob("*.tmp")))
 
-    def test_publish_failure_rolls_back_all_four_artifacts(self):
+    def test_partial_publication_restores_all_five_archives(self):
         temporary, fixture_root = self.fresh_fixture()
         self.addCleanup(temporary.cleanup)
         output_dir = Path(temporary.name) / "output"
-        first = run_packager(fixture_root, output_dir)
-        self.assertEqual(first.returncode, 0, first.stderr)
-        artifacts = {
-            path.name: path.read_bytes() for path in output_dir.glob("*.zip")
-        }
-        self.assertEqual(len(artifacts), 4)
-
+        targets, version, digests = self.packager.build_bundle(fixture_root, output_dir)
+        before = {key: path.read_bytes() for key, path in targets.items()}
         account_skill = fixture_root / "plugins/codex/lihi/skills/lihi-account/SKILL.md"
         account_skill.write_text(
-            account_skill.read_text(encoding="utf-8") + "\n",
-            encoding="utf-8",
+            account_skill.read_text(encoding="utf-8") + "\n", encoding="utf-8"
         )
         original_replace = self.packager.os.replace
-        replace_calls = []
+        calls = []
 
         def fail_on_third_publish(source, target):
-            replace_calls.append(Path(target).name)
-            if len(replace_calls) == 3:
+            calls.append(Path(target).name)
+            if len(calls) == 3:
                 raise OSError("simulated publish failure")
             return original_replace(source, target)
 
-        self.packager.os.replace = fail_on_third_publish
-        try:
+        with mock.patch.object(self.packager.os, "replace", side_effect=fail_on_third_publish):
             with self.assertRaises(self.packager.PackagingError) as raised:
                 self.packager.build_bundle(fixture_root, output_dir)
-        finally:
-            self.packager.os.replace = original_replace
-
         self.assertIn("restored the previous artifact set", str(raised.exception))
+        self.assertEqual({key: path.read_bytes() for key, path in targets.items()}, before)
         self.assertEqual(
-            {path.name: path.read_bytes() for path in output_dir.glob("*.zip")},
-            artifacts,
+            {path.resolve() for path in output_dir.iterdir()}, set(targets.values())
         )
-        self.assertFalse(any(output_dir.glob("*.tmp")))
+        self.assertEqual(
+            digests, {key: hashlib.sha256(data).hexdigest() for key, data in before.items()}
+        )
+        self.assertEqual(version, "0.3.2")
+
+    def test_late_archive_validation_failure_preserves_all_five_archives(self):
+        temporary, fixture_root = self.fresh_fixture()
+        self.addCleanup(temporary.cleanup)
+        output_dir = Path(temporary.name) / "output"
+        targets, _, _ = self.packager.build_bundle(fixture_root, output_dir)
+        before = {key: path.read_bytes() for key, path in targets.items()}
+        original_validate = self.packager.validate_archive
+        calls = []
+
+        def fail_on_last_archive(path, expected_names):
+            calls.append(path)
+            if len(calls) == 5:
+                raise self.packager.PackagingError("simulated invalid archive")
+            return original_validate(path, expected_names)
+
+        with mock.patch.object(
+            self.packager, "validate_archive", side_effect=fail_on_last_archive
+        ), mock.patch.object(self.packager.os, "replace") as replace:
+            with self.assertRaises(self.packager.PackagingError):
+                self.packager.build_bundle(fixture_root, output_dir)
+        replace.assert_not_called()
+        self.assertEqual(len(calls), 5)
+        self.assertEqual({key: path.read_bytes() for key, path in targets.items()}, before)
+        self.assertEqual(
+            {path.resolve() for path in output_dir.iterdir()}, set(targets.values())
+        )
+
+    def test_symlink_output_cannot_replace_unrelated_file(self):
+        temporary, fixture_root = self.fresh_fixture()
+        self.addCleanup(temporary.cleanup)
+        output_dir = Path(temporary.name) / "output"
+        output_dir.mkdir()
+        unrelated = Path(temporary.name) / "unrelated.zip"
+        unrelated.write_bytes(b"preserve me")
+        target = output_dir / "lihi-0.3.2.zip"
+        target.symlink_to(unrelated)
+        process = run_packager(fixture_root, output_dir)
+        self.assertNotEqual(process.returncode, 0)
+        self.assertIn("not a regular file", process.stderr)
+        self.assertTrue(target.is_symlink())
+        self.assertEqual(unrelated.read_bytes(), b"preserve me")
+
+    def test_unsupported_source_mcp_fields_are_rejected(self):
+        temporary, fixture_root = self.fresh_fixture()
+        self.addCleanup(temporary.cleanup)
+        path = fixture_root / "plugins/codex/lihi/.mcp.json"
+        config = json.loads(path.read_text(encoding="utf-8"))
+        config["mcpServers"]["lihi"]["headers"] = {"Authorization": "Bearer example"}
+        path.write_text(json.dumps(config), encoding="utf-8")
+        output_dir = Path(temporary.name) / "output"
+        process = run_packager(fixture_root, output_dir)
+        self.assertNotEqual(process.returncode, 0)
+        self.assertIn("host-managed OAuth", process.stderr)
+        self.assertFalse(output_dir.exists())
 
     def test_archive_validator_rejects_unsafe_and_colliding_paths(self):
         temporary = tempfile.TemporaryDirectory()
