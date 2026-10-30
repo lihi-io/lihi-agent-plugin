@@ -2,7 +2,7 @@
 
 其他語言：[英文版](README.md)。
 
-透過一個 Codex 或 Claude Code 外掛使用 lihi 帳號狀態、工作群組與短網址網域切換，以及短網址功能。
+透過一個 Claude Code 外掛使用 lihi 帳號狀態、工作群組與短網址網域切換，以及短網址功能。
 
 ## 外掛
 
@@ -28,15 +28,6 @@ https://app.lihi.io/mcp/v1/tools
 
 ### 直接從 GitHub 安裝
 
-#### Codex
-
-```bash
-codex plugin marketplace add https://github.com/lihi-io/lihi-agent-plugin.git
-codex plugin add lihi@lihi
-```
-
-#### Claude Code
-
 ```bash
 claude plugin marketplace add https://github.com/lihi-io/lihi-agent-plugin.git
 claude plugin install lihi@lihi
@@ -45,17 +36,8 @@ claude plugin install lihi@lihi
 ### 下載到本機後安裝
 
 1. 從 GitHub 下載原始碼壓縮檔並解壓縮，也可以使用本機 Git 複本。
-2. 找到同時包含 `.agents/plugins/marketplace.json` 與 `.claude-plugin/marketplace.json` 的解壓縮根目錄。
+2. 找到包含 `.claude-plugin/marketplace.json` 的解壓縮根目錄。
 3. 將下方的 `/absolute/path/to/lihi-agent-plugin` 換成該根目錄的絕對路徑。
-
-#### Codex
-
-```bash
-codex plugin marketplace add /absolute/path/to/lihi-agent-plugin
-codex plugin add lihi@lihi
-```
-
-#### Claude Code
 
 ```bash
 claude plugin marketplace add /absolute/path/to/lihi-agent-plugin
@@ -66,15 +48,7 @@ claude plugin install lihi@lihi
 
 ## 驗證
 
-### Codex
-
-安裝外掛或第一次使用時，Codex 可能會要求完成 lihi 驗證。若目前工作仍偵測到需要初次驗證，或偵測到符合重新驗證條件的更新權杖失敗，Codex 會先協助執行一次 `codex mcp login lihi`。若無法代為啟動指令，或執行後仍未完成驗證，請自行在終端機執行 `codex mcp login lihi`；若無法使用該指令，再開啟 **MCP 設定 → lihi → 驗證**。已有 lihi 授權時，一般工具端點的 `401 invalid_token` 或 `Auth required` 會先由宿主嘗試更新權杖一次，不會僅因該訊號就啟動互動式登入。
-
-安裝或更新後，請先開始新的 Codex 對話再使用外掛。若 Codex 應用程式仍顯示舊版外掛，再將應用程式完整結束後重新開啟，並另開新對話。
-
-### Claude Code
-
-需要驗證時，開啟 `/mcp`、選擇 lihi，然後選擇 **驗證**。
+需要驗證時，開啟 `/mcp`、選擇 lihi，然後選擇 **驗證**。已有 lihi 授權時，一般工具端點的 `401 invalid_token` 或 `Auth required` 會先由宿主嘗試更新權杖一次，不會僅因該訊號就啟動互動式登入。
 
 安裝或更新後，請開始新的 Claude Code 對話。
 
@@ -114,7 +88,7 @@ claude plugin install lihi@lihi
 
 ## 縮短網址
 
-請 Codex 或 Claude Code 潤飾含有連結的文案，或準備要對外發布的內容。例如：
+請 Claude Code 潤飾含有連結的文案，或準備要對外發布的內容。例如：
 
 ```text
 潤飾這篇貼文，並縮短其中的連結：
@@ -132,4 +106,4 @@ claude plugin install lihi@lihi
 
 若縮短流程遇到工作群組／帳號不可用、短網址網域不可用或工作群組額度上限，會停止本批次與原先要求的發布，不會自動切換選擇器，並原樣顯示檢測時的文案。請依提示另外切換工作群組或網域，再重新使用 shortening skill，或重新要求 agent 潤飾／改寫文案。
 
-如需各宿主專用的驗證與行為說明，請參閱 [Codex 指引](plugins/codex/lihi/README.zh-TW.md) 或 [Claude Code 指引](plugins/claude/lihi/README.zh-TW.md)。
+如需外掛的驗證與行為說明，請參閱 [外掛指引](plugins/claude/lihi/README.zh-TW.md)。

@@ -6,7 +6,7 @@ This document defines the 0.3.2 agent-side contract for the production Streamabl
 https://app.lihi.io/mcp/v1/tools
 ```
 
-Codex and Claude Code own transport and OAuth. Each plugin registers one MCP server and exposes the same six tools through four skills. `tools/list` advertises `_meta["lihi/plugin"].minVersion` as `0.3.2`.
+The Claude host owns transport and OAuth. The plugin registers one MCP server and exposes six tools through four skills. `tools/list` advertises `_meta["lihi/plugin"].minVersion` as `0.3.2`.
 
 Requests containing an `Origin` header are not rejected solely for that header. This contract does not claim complete browser or CORS support.
 
@@ -160,13 +160,9 @@ Unknown text follows generic error handling. Do not silently route a future loca
 - Per authentication incident, allow one host refresh, one qualifying interactive authentication, and one resumed operation. A second authentication failure stops.
 - Interactive reauthentication is limited to an HTTP 401 refresh-token exchange or explicit invalid/expired/revoked/unusable refresh-token error. `invalid_grant` qualifies only in that exchange.
 
-### OAuth interactive authentication — Codex
+### OAuth interactive authentication
 
-Use `codex mcp login lihi` once when shell execution is available. If it cannot start or complete, ask the user to run the same command. Use **MCP settings → lihi → Authenticate** only when the command is unavailable.
-
-### OAuth interactive authentication — Claude Code
-
-Ask the user to open `/mcp`, select the lihi plugin server, and choose **Authenticate**. Do not run or recommend a Codex command.
+Ask the user to open `/mcp`, select the lihi plugin server, and choose **Authenticate**.
 
 ## Compaction and release
 

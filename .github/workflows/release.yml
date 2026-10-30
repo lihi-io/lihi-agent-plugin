@@ -1,0 +1,72 @@
+name: Package release artifacts
+
+on:
+  push:
+    tags:
+      - "**"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  package:
+    name: Package production marketplace (Python 3.8)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Set up Python 3.8
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: "3.8"
+
+      - name: Run unit tests
+        run: python -m unittest discover -s tests -v
+
+      - name: Check Python syntax
+        run: >-
+          python -m compileall -q
+          scripts
+          tests
+          plugins/claude/lihi/skills/lihi-shorten/scripts
+
+      - name: Check whitespace errors
+        run: git diff --check "$(git hash-object -t tree /dev/null)" HEAD -- .
+
+      - name: Build production marketplace bundle
+        run: >-
+          python scripts/package_production_bundle.py
+          --output-dir dist/production
+
+      - name: Verify tag matches package version
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          if [[ "$RELEASE_TAG" =~ ^v?([0-9]+\.[0-9]+\.[0-9]+)$ ]]; then
+            package_version="${BASH_REMATCH[1]}"
+          else
+            echo "::error::Release tag must be a SemVer version such as v0.3.2 or 0.3.2 (got $RELEASE_TAG)."
+            exit 1
+          fi
+
+          production_bundle="dist/production/lihi-agent-${package_version}"
+          if [ ! -d "$production_bundle" ]; then
+            echo "::error::Tag $RELEASE_TAG does not match the production manifest version."
+            exit 1
+          fi
+
+      - name: Upload production marketplace bundle
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: lihi-agent-production-${{ github.ref_name }}
+          path: dist/production/lihi-agent-*
+          if-no-files-found: error
+          include-hidden-files: true
+          retention-days: 90

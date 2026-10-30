@@ -39,31 +39,14 @@ DEVELOP_SWITCH_GROUP_SKILL_NAME = "lihi-switch-group-dev"
 PRODUCTION_SWITCH_DOMAIN_SKILL_NAME = "lihi-switch-domain"
 DEVELOP_SWITCH_DOMAIN_SKILL_NAME = "lihi-switch-domain-dev"
 
-PRODUCTION_PLUGIN_ROOTS = (
-    Path("plugins/codex/lihi"),
-    Path("plugins/claude/lihi"),
-)
-DEVELOP_PLUGIN_ROOTS = (
-    Path("plugins/codex/lihi-dev"),
-    Path("plugins/claude/lihi-dev"),
-)
-PLUGIN_ROOT_PAIRS = tuple(zip(PRODUCTION_PLUGIN_ROOTS, DEVELOP_PLUGIN_ROOTS))
-PLUGIN_MANIFESTS = (
-    Path("plugins/codex/lihi/.codex-plugin/plugin.json"),
-    Path("plugins/claude/lihi/.claude-plugin/plugin.json"),
-)
-DEVELOP_PLUGIN_MANIFESTS = (
-    Path("plugins/codex/lihi-dev/.codex-plugin/plugin.json"),
-    Path("plugins/claude/lihi-dev/.claude-plugin/plugin.json"),
-)
-MARKETPLACE_MANIFESTS = (
-    Path(".agents/plugins/marketplace.json"),
-    Path(".claude-plugin/marketplace.json"),
-)
+PRODUCTION_PLUGIN_ROOT = Path("plugins/claude/lihi")
+DEVELOP_PLUGIN_ROOT = Path("plugins/claude/lihi-dev")
+PLUGIN_MANIFEST = PRODUCTION_PLUGIN_ROOT / ".claude-plugin/plugin.json"
+DEVELOP_PLUGIN_MANIFEST = DEVELOP_PLUGIN_ROOT / ".claude-plugin/plugin.json"
+MARKETPLACE_MANIFEST = Path(".claude-plugin/marketplace.json")
 INCLUDED_PATHS = (
-    Path(".agents"),
     Path(".claude-plugin"),
-    *PRODUCTION_PLUGIN_ROOTS,
+    PRODUCTION_PLUGIN_ROOT,
     Path("README.md"),
     Path("README.zh-TW.md"),
     Path("docs"),
@@ -83,54 +66,20 @@ SKILL_IDENTITIES = (
 )
 SKILL_PATH_PAIRS = tuple(
     (
-        plugin_root / "skills" / production_name,
-        plugin_root / "skills" / develop_name,
+        PRODUCTION_PLUGIN_ROOT / "skills" / production_name,
+        PRODUCTION_PLUGIN_ROOT / "skills" / develop_name,
         production_name,
         develop_name,
     )
-    for plugin_root in PRODUCTION_PLUGIN_ROOTS
     for production_name, develop_name in SKILL_IDENTITIES
 )
 DEVELOP_SKILL_PATHS = tuple(
-    develop_root / "skills" / develop_name
-    for develop_root in DEVELOP_PLUGIN_ROOTS
+    DEVELOP_PLUGIN_ROOT / "skills" / develop_name
     for _production_name, develop_name in SKILL_IDENTITIES
 )
 
-SOURCE_RUNTIME_ENDPOINT_FILES = (
-    Path("plugins/codex/lihi/.mcp.json"),
-    Path("plugins/codex/lihi/skills/lihi-shorten/agents/openai.yaml"),
-    Path("plugins/codex/lihi/skills/lihi-account/agents/openai.yaml"),
-    Path(
-        "plugins/codex/lihi/skills/"
-        "lihi-switch-group/agents/openai.yaml"
-    ),
-    Path(
-        "plugins/codex/lihi/skills/"
-        "lihi-switch-domain/agents/openai.yaml"
-    ),
-    Path("plugins/claude/lihi/.mcp.json"),
-)
-DEVELOP_RUNTIME_ENDPOINT_FILES = (
-    Path("plugins/codex/lihi-dev/.mcp.json"),
-    Path(
-        "plugins/codex/lihi-dev/skills/"
-        "lihi-shorten-dev/agents/openai.yaml"
-    ),
-    Path(
-        "plugins/codex/lihi-dev/skills/"
-        "lihi-account-dev/agents/openai.yaml"
-    ),
-    Path(
-        "plugins/codex/lihi-dev/skills/"
-        "lihi-switch-group-dev/agents/openai.yaml"
-    ),
-    Path(
-        "plugins/codex/lihi-dev/skills/"
-        "lihi-switch-domain-dev/agents/openai.yaml"
-    ),
-    Path("plugins/claude/lihi-dev/.mcp.json"),
-)
+SOURCE_RUNTIME_ENDPOINT_FILES = (PRODUCTION_PLUGIN_ROOT / ".mcp.json",)
+DEVELOP_RUNTIME_ENDPOINT_FILES = (DEVELOP_PLUGIN_ROOT / ".mcp.json",)
 
 TEXT_SUFFIXES = {".json", ".md", ".yaml", ".yml"}
 PACKAGE_IGNORE = shutil.ignore_patterns(
@@ -138,7 +87,6 @@ PACKAGE_IGNORE = shutil.ignore_patterns(
     "*.pyc",
     "*.pyo",
     ".DS_Store",
-    "openai-platform-packaging.md",
 )
 SEMVER_PATTERN = re.compile(
     r"^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)"
@@ -192,37 +140,16 @@ def build_develop_version(repo_root: Path, build_number: str) -> str:
     if not normalized_build:
         raise PackagingError("build-number must be a non-negative integer")
 
-    version_cores = set()
-    for relative_path in PLUGIN_MANIFESTS:
-        manifest_path = repo_root / relative_path
-        manifest = read_json(manifest_path)
-        manifest_version = manifest.get("version")
-        version_core = semantic_version_core(manifest_version, manifest_path)
-        if manifest_version != version_core:
-            raise PackagingError(
-                "Production manifests must use plain major.minor.patch "
-                "versions without build metadata: {0}".format(manifest_path)
-            )
-        version_cores.add(version_core)
-    if len(version_cores) != 1:
+    manifest_path = repo_root / PLUGIN_MANIFEST
+    manifest_version = read_json(manifest_path).get("version")
+    version_core = semantic_version_core(manifest_version, manifest_path)
+    if manifest_version != version_core:
         raise PackagingError(
-            "All Codex and Claude manifests must have the same "
-            "major.minor.patch version"
+            "Production manifests must use plain major.minor.patch "
+            "versions without build metadata: {0}".format(manifest_path)
         )
 
-    return "{0}-develop.{1}".format(
-        version_cores.pop(),
-        normalized_build,
-    )
-
-
-def codex_develop_version(version: str) -> str:
-    _prefix, separator, build_number = version.rpartition("-develop.")
-    if not separator or not build_number.isdigit():
-        raise PackagingError(
-            "Codex cachebuster requires a generated develop version"
-        )
-    return "{0}+codex.{1}".format(version, build_number)
+    return "{0}-develop.{1}".format(version_core, normalized_build)
 
 
 def marketplace_plugin(
@@ -281,15 +208,6 @@ def validate_mcp_server_name(path: Path, expected_name: str) -> None:
         )
 
 
-def marketplace_source_path(plugin: dict, codex: bool) -> object:
-    source = plugin.get("source")
-    if codex:
-        if not isinstance(source, dict):
-            return None
-        return source.get("path")
-    return source
-
-
 def validate_source_bundle(repo_root: Path) -> None:
     for relative_path in SOURCE_RUNTIME_ENDPOINT_FILES:
         path = repo_root / relative_path
@@ -305,75 +223,50 @@ def validate_source_bundle(repo_root: Path) -> None:
                 "endpoint: {0}".format(relative_path)
             )
 
-    expected_sources = (
-        "./plugins/codex/lihi",
-        "./plugins/claude/lihi",
+    path = repo_root / MARKETPLACE_MANIFEST
+    marketplace = read_json(path)
+    if marketplace.get("name") != PRODUCTION_MARKETPLACE_NAME:
+        raise PackagingError(
+            "Source marketplace must remain production-only: {0}".format(path)
+        )
+    validate_marketplace_plugin_names(
+        marketplace,
+        path,
+        (PRODUCTION_PLUGIN_NAME,),
     )
-    for index, relative_path in enumerate(MARKETPLACE_MANIFESTS):
-        path = repo_root / relative_path
-        marketplace = read_json(path)
-        if marketplace.get("name") != PRODUCTION_MARKETPLACE_NAME:
-            raise PackagingError(
-                "Source marketplace must remain production-only: {0}".format(
-                    path
-                )
+    plugin = marketplace_plugin(
+        marketplace,
+        path,
+        PRODUCTION_PLUGIN_NAME,
+    )
+    if plugin.get("source") != "./" + PRODUCTION_PLUGIN_ROOT.as_posix():
+        raise PackagingError(
+            "Source marketplace points at the wrong plugin root: {0}".format(
+                path
             )
-        validate_marketplace_plugin_names(
-            marketplace,
-            path,
-            (PRODUCTION_PLUGIN_NAME,),
         )
-        plugin = marketplace_plugin(
-            marketplace,
-            path,
-            PRODUCTION_PLUGIN_NAME,
+    if plugin.get("displayName") != PRODUCTION_DISPLAY_NAME:
+        raise PackagingError(
+            "Source marketplace has the wrong display name: {0}".format(path)
         )
-        if marketplace_source_path(plugin, codex=index == 0) != expected_sources[index]:
-            raise PackagingError(
-                "Source marketplace points at the wrong plugin root: {0}".format(
-                    path
-                )
-            )
-        marketplace_interface = marketplace.get("interface")
-        if index == 0 and isinstance(marketplace_interface, dict):
-            marketplace_display_name = marketplace_interface.get("displayName")
-        else:
-            marketplace_display_name = plugin.get("displayName")
-        if marketplace_display_name != PRODUCTION_DISPLAY_NAME:
-            raise PackagingError(
-                "Source marketplace has the wrong display name: {0}".format(
-                    path
-                )
-            )
 
-    for index, relative_path in enumerate(PLUGIN_MANIFESTS):
-        path = repo_root / relative_path
-        manifest = read_json(path)
-        interface = manifest.get("interface")
-        display_name = (
-            interface.get("displayName")
-            if index == 0 and isinstance(interface, dict)
-            else manifest.get("displayName")
+    path = repo_root / PLUGIN_MANIFEST
+    manifest = read_json(path)
+    if (
+        manifest.get("name") != PRODUCTION_PLUGIN_NAME
+        or manifest.get("displayName") != PRODUCTION_DISPLAY_NAME
+    ):
+        raise PackagingError(
+            "Source plugin identity must remain production-only: "
+            "{0}".format(path)
         )
-        if (
-            manifest.get("name") != PRODUCTION_PLUGIN_NAME
-            or display_name != PRODUCTION_DISPLAY_NAME
-        ):
-            raise PackagingError(
-                "Source plugin identity must remain production-only: "
-                "{0}".format(path)
-            )
 
-    for plugin_root in PRODUCTION_PLUGIN_ROOTS:
-        validate_mcp_server_name(
-            repo_root / plugin_root / ".mcp.json",
-            PRODUCTION_MCP_NAME,
-        )
-    for develop_root in DEVELOP_PLUGIN_ROOTS:
-        if (repo_root / develop_root).exists():
-            raise PackagingError(
-                "Source plugin roots must remain production-only"
-            )
+    validate_mcp_server_name(
+        repo_root / PRODUCTION_PLUGIN_ROOT / ".mcp.json",
+        PRODUCTION_MCP_NAME,
+    )
+    if (repo_root / DEVELOP_PLUGIN_ROOT).exists():
+        raise PackagingError("Source plugin roots must remain production-only")
 
     for (
         source_skill_path,
@@ -392,45 +285,6 @@ def validate_source_bundle(repo_root: Path) -> None:
                 "Source skill name must remain production-only: {0}".format(
                     source_path
                 )
-            )
-
-    for skill_name, relative_path in (
-        (
-            PRODUCTION_SKILL_NAME,
-            Path(
-                "plugins/codex/lihi/skills/"
-                "lihi-shorten/agents/openai.yaml"
-            ),
-        ),
-        (
-            PRODUCTION_ACCOUNT_SKILL_NAME,
-            Path(
-                "plugins/codex/lihi/skills/"
-                "lihi-account/agents/openai.yaml"
-            ),
-        ),
-        (
-            PRODUCTION_SWITCH_GROUP_SKILL_NAME,
-            Path(
-                "plugins/codex/lihi/skills/"
-                "lihi-switch-group/agents/openai.yaml"
-            ),
-        ),
-        (
-            PRODUCTION_SWITCH_DOMAIN_SKILL_NAME,
-            Path(
-                "plugins/codex/lihi/skills/"
-                "lihi-switch-domain/agents/openai.yaml"
-            ),
-        ),
-    ):
-        openai_yaml = (repo_root / relative_path).read_text(encoding="utf-8")
-        if (
-            'value: "{0}"'.format(PRODUCTION_MCP_NAME) not in openai_yaml
-            or "${0}".format(skill_name) not in openai_yaml
-        ):
-            raise PackagingError(
-                "Codex source skill metadata must remain production-only"
             )
 
 
@@ -523,7 +377,6 @@ def rewrite_develop_text_identities(staging_root: Path) -> None:
             "`" + PRODUCTION_SKILL_NAME + "`",
             "`" + DEVELOP_SKILL_NAME + "`",
         ),
-        ("plugins/codex/lihi", "plugins/codex/lihi-dev"),
         ("plugins/claude/lihi", "plugins/claude/lihi-dev"),
         (PRODUCTION_PLUGIN_SELECTOR, DEVELOP_PLUGIN_SELECTOR),
         (
@@ -547,19 +400,6 @@ def rewrite_develop_text_identities(staging_root: Path) -> None:
             DEVELOP_DISPLAY_NAME + " 用戶端套件",
         ),
         (
-            "$" + PRODUCTION_SWITCH_DOMAIN_SKILL_NAME,
-            "$" + DEVELOP_SWITCH_DOMAIN_SKILL_NAME,
-        ),
-        (
-            "$" + PRODUCTION_SWITCH_GROUP_SKILL_NAME,
-            "$" + DEVELOP_SWITCH_GROUP_SKILL_NAME,
-        ),
-        (
-            "$" + PRODUCTION_ACCOUNT_SKILL_NAME,
-            "$" + DEVELOP_ACCOUNT_SKILL_NAME,
-        ),
-        ("$" + PRODUCTION_SKILL_NAME, "$" + DEVELOP_SKILL_NAME),
-        (
             "name: " + PRODUCTION_SWITCH_DOMAIN_SKILL_NAME,
             "name: " + DEVELOP_SWITCH_DOMAIN_SKILL_NAME,
         ),
@@ -572,37 +412,6 @@ def rewrite_develop_text_identities(staging_root: Path) -> None:
             "name: " + DEVELOP_ACCOUNT_SKILL_NAME,
         ),
         ("name: " + PRODUCTION_SKILL_NAME, "name: " + DEVELOP_SKILL_NAME),
-        (
-            'display_name: "{0}"'.format(
-                PRODUCTION_SWITCH_DOMAIN_SKILL_NAME
-            ),
-            'display_name: "{0}"'.format(
-                DEVELOP_SWITCH_DOMAIN_SKILL_NAME
-            ),
-        ),
-        (
-            'display_name: "{0}"'.format(
-                PRODUCTION_SWITCH_GROUP_SKILL_NAME
-            ),
-            'display_name: "{0}"'.format(
-                DEVELOP_SWITCH_GROUP_SKILL_NAME
-            ),
-        ),
-        (
-            'display_name: "{0}"'.format(PRODUCTION_ACCOUNT_SKILL_NAME),
-            'display_name: "{0}"'.format(DEVELOP_ACCOUNT_SKILL_NAME),
-        ),
-        (
-            'display_name: "{0}"'.format(PRODUCTION_SKILL_NAME),
-            'display_name: "{0}"'.format(DEVELOP_SKILL_NAME),
-        ),
-        (
-            'value: "{0}"'.format(PRODUCTION_MCP_NAME),
-            'value: "{0}"'.format(DEVELOP_MCP_NAME),
-        ),
-        ("codex mcp login lihi`", "codex mcp login lihi-dev`"),
-        ("codex mcp login lihi\n", "codex mcp login lihi-dev\n"),
-        ("codex mcp add lihi ", "codex mcp add lihi-dev "),
         ("remote `lihi` MCP server", "remote `lihi-dev` MCP server"),
         ("remote MCP server `lihi`", "remote MCP server `lihi-dev`"),
         ("the `lihi` MCP server", "the `lihi-dev` MCP server"),
@@ -616,14 +425,6 @@ def rewrite_develop_text_identities(staging_root: Path) -> None:
         ),
         ("logical server key is `lihi`", "logical server key is `lihi-dev`"),
         ("bundled `lihi` MCP client", "bundled `lihi-dev` MCP client"),
-        (
-            "MCP settings → lihi → Authenticate",
-            "MCP settings → lihi-dev → Authenticate",
-        ),
-        (
-            "MCP 設定 → lihi → 驗證",
-            "MCP 設定 → lihi-dev → 驗證",
-        ),
         ("the lihi plugin server", "the lihi-dev plugin server"),
         ("select lihi,", "select lihi-dev,"),
         ("選擇 lihi，", "選擇 lihi-dev，"),
@@ -639,85 +440,41 @@ def rewrite_develop_text_identities(staging_root: Path) -> None:
 
 
 def rename_plugin_directories(staging_root: Path) -> None:
-    for production_root, develop_root in PLUGIN_ROOT_PAIRS:
-        source_path = staging_root / production_root
-        develop_path = staging_root / develop_root
-        if not source_path.is_dir() or develop_path.exists():
-            raise PackagingError(
-                "Cannot isolate develop plugin directory: {0}".format(
-                    source_path
-                )
-            )
-        source_path.rename(develop_path)
+    source_path = staging_root / PRODUCTION_PLUGIN_ROOT
+    develop_path = staging_root / DEVELOP_PLUGIN_ROOT
+    if not source_path.is_dir() or develop_path.exists():
+        raise PackagingError(
+            "Cannot isolate develop plugin directory: {0}".format(source_path)
+        )
+    source_path.rename(develop_path)
 
 
 def update_develop_marketplaces(staging_root: Path) -> None:
-    expected_sources = (
-        "./plugins/codex/lihi-dev",
-        "./plugins/claude/lihi-dev",
+    path = staging_root / MARKETPLACE_MANIFEST
+    marketplace = read_json(path)
+    marketplace["name"] = DEVELOP_MARKETPLACE_NAME
+    marketplace["description"] = "lihi develop agent integrations"
+    plugin = marketplace_plugin(
+        marketplace,
+        path,
+        PRODUCTION_PLUGIN_NAME,
     )
-    for index, relative_path in enumerate(MARKETPLACE_MANIFESTS):
-        path = staging_root / relative_path
-        marketplace = read_json(path)
-        marketplace["name"] = DEVELOP_MARKETPLACE_NAME
-        plugin = marketplace_plugin(
-            marketplace,
-            path,
-            PRODUCTION_PLUGIN_NAME,
-        )
-        plugin["name"] = DEVELOP_PLUGIN_NAME
-        if index == 0:
-            interface = marketplace.get("interface")
-            if not isinstance(interface, dict):
-                raise PackagingError(
-                    "Codex marketplace interface must be an object"
-                )
-            interface["displayName"] = DEVELOP_DISPLAY_NAME
-            source = plugin.get("source")
-            if not isinstance(source, dict):
-                raise PackagingError(
-                    "Codex marketplace source must be an object"
-                )
-            source["path"] = expected_sources[index]
-        else:
-            marketplace["description"] = "lihi develop agent integrations"
-            plugin["displayName"] = DEVELOP_DISPLAY_NAME
-            plugin["source"] = expected_sources[index]
-            plugin["description"] = (
-                "Develop build connecting to lihi through one OAuth MCP "
-                "registration for account status, group and domain switching, "
-                "and automatic URL shortening."
-            )
-        write_json(path, marketplace)
+    plugin["name"] = DEVELOP_PLUGIN_NAME
+    plugin["displayName"] = DEVELOP_DISPLAY_NAME
+    plugin["source"] = "./" + DEVELOP_PLUGIN_ROOT.as_posix()
+    plugin["description"] = (
+        "Develop build connecting to lihi through one OAuth MCP "
+        "registration for account status, group and domain switching, "
+        "and automatic URL shortening."
+    )
+    write_json(path, marketplace)
 
 
 def update_develop_plugin_manifests(
     staging_root: Path,
     version: str,
 ) -> None:
-    codex_path = staging_root / DEVELOP_PLUGIN_MANIFESTS[0]
-    codex_manifest = read_json(codex_path)
-    codex_manifest["name"] = DEVELOP_PLUGIN_NAME
-    codex_manifest["version"] = codex_develop_version(version)
-    codex_manifest["description"] = (
-        "Develop build connecting Codex to lihi through one OAuth MCP "
-        "registration for account status, group and domain switching, and "
-        "automatic URL shortening."
-    )
-    codex_interface = codex_manifest.get("interface")
-    if not isinstance(codex_interface, dict):
-        raise PackagingError("Codex plugin interface must be an object")
-    codex_interface["displayName"] = DEVELOP_DISPLAY_NAME
-    codex_interface["shortDescription"] = (
-        "Develop lihi account and short URL tools"
-    )
-    codex_interface["longDescription"] = (
-        "Develop build connected to the lihi develop MCP server for account "
-        "status, group and domain switching, and automatic URL shortening."
-    )
-    write_json(codex_path, codex_manifest)
-
-    claude_path = staging_root / DEVELOP_PLUGIN_MANIFESTS[1]
+    claude_path = staging_root / DEVELOP_PLUGIN_MANIFEST
     claude_manifest = read_json(claude_path)
     claude_manifest["name"] = DEVELOP_PLUGIN_NAME
     claude_manifest["displayName"] = DEVELOP_DISPLAY_NAME
@@ -731,19 +488,15 @@ def update_develop_plugin_manifests(
 
 
 def update_develop_mcp_identities(staging_root: Path) -> None:
-    for plugin_root in DEVELOP_PLUGIN_ROOTS:
-        path = staging_root / plugin_root / ".mcp.json"
-        config = read_json(path)
-        servers = config.get("mcpServers")
-        if (
-            not isinstance(servers, dict)
-            or list(servers) != [PRODUCTION_MCP_NAME]
-        ):
-            raise PackagingError(
-                "Cannot isolate develop MCP identity in {0}".format(path)
-            )
-        servers[DEVELOP_MCP_NAME] = servers.pop(PRODUCTION_MCP_NAME)
-        write_json(path, config)
+    path = staging_root / DEVELOP_PLUGIN_ROOT / ".mcp.json"
+    config = read_json(path)
+    servers = config.get("mcpServers")
+    if not isinstance(servers, dict) or list(servers) != [PRODUCTION_MCP_NAME]:
+        raise PackagingError(
+            "Cannot isolate develop MCP identity in {0}".format(path)
+        )
+    servers[DEVELOP_MCP_NAME] = servers.pop(PRODUCTION_MCP_NAME)
+    write_json(path, config)
 
 
 def rewrite_develop_readme(staging_root: Path) -> None:
@@ -798,11 +551,6 @@ def rewrite_develop_readme(staging_root: Path) -> None:
             )
         updated = content.replace(source_sentence, develop_sentence)
         updated = updated.replace(
-            "codex plugin marketplace add "
-            "https://github.com/lihi-io/lihi-agent-plugin.git",
-            "codex plugin marketplace add .",
-        )
-        updated = updated.replace(
             "claude plugin marketplace add "
             "https://github.com/lihi-io/lihi-agent-plugin.git",
             "claude plugin marketplace add .",
@@ -824,10 +572,8 @@ def rewrite_develop_readme(staging_root: Path) -> None:
             )
             updated = updated.replace(
                 "2. Locate the extracted repository root containing "
-                "`.agents/plugins/marketplace.json` and "
                 "`.claude-plugin/marketplace.json`.",
                 "2. Locate the extracted artifact root containing "
-                "`.agents/plugins/marketplace.json` and "
                 "`.claude-plugin/marketplace.json`.",
             )
             updated = updated.replace(
@@ -864,11 +610,10 @@ def rewrite_develop_readme(staging_root: Path) -> None:
                 "1. 將下載的開發版成品解壓縮。",
             )
             updated = updated.replace(
-                "2. 找到同時包含 `.agents/plugins/marketplace.json` 與 "
-                "`.claude-plugin/marketplace.json` 的解壓縮根目錄。",
-                "2. 找到同時包含 `.agents/plugins/marketplace.json` 與 "
-                "`.claude-plugin/marketplace.json` 的成品解壓縮"
-                "根目錄。",
+                "2. 找到包含 `.claude-plugin/marketplace.json` 的"
+                "解壓縮根目錄。",
+                "2. 找到包含 `.claude-plugin/marketplace.json` 的"
+                "成品解壓縮根目錄。",
             )
             updated = updated.replace(
                 "/absolute/path/to/lihi-agent-plugin",
@@ -939,82 +684,54 @@ def validate_staged_package(staging_root: Path, version: str) -> None:
                 "endpoint: {0}".format(relative_path)
             )
 
-    expected_sources = (
-        "./plugins/codex/lihi-dev",
-        "./plugins/claude/lihi-dev",
+    path = staging_root / MARKETPLACE_MANIFEST
+    marketplace = read_json(path)
+    validate_marketplace_plugin_names(
+        marketplace,
+        path,
+        (DEVELOP_PLUGIN_NAME,),
     )
-    for index, relative_path in enumerate(MARKETPLACE_MANIFESTS):
-        path = staging_root / relative_path
-        marketplace = read_json(path)
-        validate_marketplace_plugin_names(
-            marketplace,
-            path,
-            (DEVELOP_PLUGIN_NAME,),
-        )
-        plugin = marketplace_plugin(
-            marketplace,
-            path,
-            DEVELOP_PLUGIN_NAME,
-        )
-        if marketplace.get("name") != DEVELOP_MARKETPLACE_NAME:
-            raise PackagingError(
-                "Packaged marketplace has the wrong identity: {0}".format(
-                    path
-                )
-            )
-        if marketplace_source_path(plugin, codex=index == 0) != expected_sources[index]:
-            raise PackagingError(
-                "Packaged marketplace has the wrong source: {0}".format(path)
-            )
-        marketplace_interface = marketplace.get("interface")
-        if index == 0 and isinstance(marketplace_interface, dict):
-            marketplace_display_name = marketplace_interface.get("displayName")
-        else:
-            marketplace_display_name = plugin.get("displayName")
-        if marketplace_display_name != DEVELOP_DISPLAY_NAME:
-            raise PackagingError(
-                "Packaged marketplace has the wrong display name: {0}".format(
-                    path
-                )
-            )
-
-    expected_manifest_versions = (
-        codex_develop_version(version),
-        version,
+    plugin = marketplace_plugin(
+        marketplace,
+        path,
+        DEVELOP_PLUGIN_NAME,
     )
-    for index, relative_path in enumerate(DEVELOP_PLUGIN_MANIFESTS):
-        path = staging_root / relative_path
-        manifest = read_json(path)
-        interface = manifest.get("interface")
-        display_name = (
-            interface.get("displayName")
-            if index == 0 and isinstance(interface, dict)
-            else manifest.get("displayName")
+    if marketplace.get("name") != DEVELOP_MARKETPLACE_NAME:
+        raise PackagingError(
+            "Packaged marketplace has the wrong identity: {0}".format(path)
         )
-        if (
-            manifest.get("name") != DEVELOP_PLUGIN_NAME
-            or manifest.get("version") != expected_manifest_versions[index]
-            or display_name != DEVELOP_DISPLAY_NAME
-        ):
-            raise PackagingError(
-                "Packaged plugin has the wrong identity or version: "
-                "{0}".format(path)
-            )
+    if plugin.get("source") != "./" + DEVELOP_PLUGIN_ROOT.as_posix():
+        raise PackagingError(
+            "Packaged marketplace has the wrong source: {0}".format(path)
+        )
+    if plugin.get("displayName") != DEVELOP_DISPLAY_NAME:
+        raise PackagingError(
+            "Packaged marketplace has the wrong display name: {0}".format(path)
+        )
 
-    for production_root, develop_root in PLUGIN_ROOT_PAIRS:
-        if (staging_root / production_root).exists():
-            raise PackagingError(
-                "Production plugin root remains in develop package"
-            )
-        validate_mcp_server_name(
-            staging_root / develop_root / ".mcp.json",
-            DEVELOP_MCP_NAME,
+    path = staging_root / DEVELOP_PLUGIN_MANIFEST
+    manifest = read_json(path)
+    if (
+        manifest.get("name") != DEVELOP_PLUGIN_NAME
+        or manifest.get("version") != version
+        or manifest.get("displayName") != DEVELOP_DISPLAY_NAME
+    ):
+        raise PackagingError(
+            "Packaged plugin has the wrong identity or version: "
+            "{0}".format(path)
         )
+
+    if (staging_root / PRODUCTION_PLUGIN_ROOT).exists():
+        raise PackagingError("Production plugin root remains in develop package")
+    validate_mcp_server_name(
+        staging_root / DEVELOP_PLUGIN_ROOT / ".mcp.json",
+        DEVELOP_MCP_NAME,
+    )
 
     for develop_path, (
         _production_name,
         develop_name,
-    ) in zip(DEVELOP_SKILL_PATHS, SKILL_IDENTITIES * 2):
+    ) in zip(DEVELOP_SKILL_PATHS, SKILL_IDENTITIES):
         path = staging_root / develop_path
         if not path.is_dir():
             raise PackagingError(
@@ -1031,52 +748,12 @@ def validate_staged_package(staging_root: Path, version: str) -> None:
                 "Packaged skill has the wrong identity: {0}".format(path)
             )
 
-    for skill_name, relative_path in (
-        (
-            DEVELOP_SKILL_NAME,
-            Path(
-                "plugins/codex/lihi-dev/skills/"
-                "lihi-shorten-dev/agents/openai.yaml"
-            ),
-        ),
-        (
-            DEVELOP_ACCOUNT_SKILL_NAME,
-            Path(
-                "plugins/codex/lihi-dev/skills/"
-                "lihi-account-dev/agents/openai.yaml"
-            ),
-        ),
-        (
-            DEVELOP_SWITCH_GROUP_SKILL_NAME,
-            Path(
-                "plugins/codex/lihi-dev/skills/"
-                "lihi-switch-group-dev/agents/openai.yaml"
-            ),
-        ),
-        (
-            DEVELOP_SWITCH_DOMAIN_SKILL_NAME,
-            Path(
-                "plugins/codex/lihi-dev/skills/"
-                "lihi-switch-domain-dev/agents/openai.yaml"
-            ),
-        ),
-    ):
-        openai_yaml = (staging_root / relative_path).read_text(encoding="utf-8")
-        if (
-            'value: "{0}"'.format(DEVELOP_MCP_NAME) not in openai_yaml
-            or "${0}".format(skill_name) not in openai_yaml
-        ):
-            raise PackagingError(
-                "Packaged Codex skill metadata has the wrong identity"
-            )
-
     for relative_path in (Path("README.md"), Path("README.zh-TW.md")):
         root_readme = (staging_root / relative_path).read_text(
             encoding="utf-8"
         )
         if (
             DEVELOP_PLUGIN_SELECTOR not in root_readme
-            or "codex plugin marketplace add ." not in root_readme
             or "claude plugin marketplace add ." not in root_readme
         ):
             raise PackagingError(

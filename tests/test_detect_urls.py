@@ -12,7 +12,6 @@ from typing import Dict
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT_PATHS = (
-    ROOT / "plugins/codex/lihi/skills/lihi-shorten/scripts/detect_urls.py",
     ROOT / "plugins/claude/lihi/skills/lihi-shorten/scripts/detect_urls.py",
 )
 
@@ -32,15 +31,9 @@ class DetectUrlsTests(unittest.TestCase):
         cls.detectors = tuple(load_detector(path) for path in SCRIPT_PATHS)
 
     def assert_same_result(self, text: str, include_code: bool = False) -> Dict[str, object]:
-        results = tuple(
-            detector.detect_urls(text, include_code=include_code)
-            for detector in self.detectors
-        )
-        self.assertEqual(results[0], results[1])
-        return results[0]
+        return self.detectors[0].detect_urls(text, include_code=include_code)
 
-    def test_bundled_scripts_are_identical(self) -> None:
-        self.assertEqual(SCRIPT_PATHS[0].read_bytes(), SCRIPT_PATHS[1].read_bytes())
+    def test_bundled_script_parses_as_python_3_8(self) -> None:
         ast.parse(SCRIPT_PATHS[0].read_text(encoding="utf-8"), feature_version=(3, 8))
         ast.parse(Path(__file__).read_text(encoding="utf-8"), feature_version=(3, 8))
 

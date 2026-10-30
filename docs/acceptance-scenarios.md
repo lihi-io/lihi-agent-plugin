@@ -86,14 +86,13 @@ These scenarios apply to both production host bundles and their generated develo
 | G2 | Invalid/expired/revoked/unusable refresh token | At most one interactive reauthentication; unrelated readable errors do not start login. |
 | G3 | Switch authentication recovery | OAuth reference performs authentication only; error recovery alone owns fresh discovery, verification, or a permitted retry. |
 | G4 | Second authentication failure in the incident | Stop with state preserved. |
-| G5 | Codex interactive recovery | Run `codex mcp login lihi` once when available, then user-command fallback, then settings fallback only if unavailable. |
-| G6 | Claude Code interactive recovery | Open `/mcp`, select lihi, and choose **Authenticate**; never reference Codex commands. |
-| G7 | No create succeeded or may have dispatched | State in the user's language that no link was created or published; Chinese includes `目前尚未建立或發布任何連結。` |
+| G5 | Claude Code interactive recovery | Open `/mcp`, select lihi, and choose **Authenticate**. |
+| G6 | No create succeeded or may have dispatched | State in the user's language that no link was created or published; Chinese includes `目前尚未建立或發布任何連結。` |
 
 ## H. Static and package invariants
 
-- Both detector scripts and both shortening workflows are byte-identical; detector syntax parses as Python 3.8.
-- Codex metadata for all four skills points to the one production `lihi` MCP dependency; develop metadata points to `lihi-dev`.
+- Detector syntax parses as Python 3.8.
+- The plugin passes `claude plugin validate --strict` and includes `LICENSE`.
 - `DEVELOP_BUILD.skill_names` lists all four develop skills in canonical order; both singular aliases equal the first item.
 - Active runtime and generated artifacts contain none of the removed selector/request fields or superseded skill/tool identities.
 - Production runtime contains no develop endpoint or identity; develop runtime contains no production endpoint or runtime identity.

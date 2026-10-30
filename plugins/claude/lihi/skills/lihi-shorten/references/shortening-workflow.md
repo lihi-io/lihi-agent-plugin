@@ -39,7 +39,7 @@ Append `已確認的既有對應會直接重用，不會再次建立。` only wh
 
   ```text
   lihi 目前的工作群組或帳號無法使用，本次縮短已停止。
-  若要繼續縮短，請先要求 agent「切換工作群組」（使用 `$lihi-switch-group`）；若沒有可切換的群組，請使用 `$lihi-account` 檢查帳號狀態。處理完成後，再使用 `$lihi-shorten`，或重新要求 agent 潤飾／改寫文案。
+  若要繼續縮短，請先要求 agent「切換工作群組」（使用 `lihi-switch-group` 技能）；若沒有可切換的群組，請使用 `lihi-account` 技能檢查帳號狀態。處理完成後，再使用 `lihi-shorten` 技能，或重新要求 agent 潤飾／改寫文案。
 
   以下為未套用本次短網址替換的原本文案：
   <original-inspected-content-snapshot>
@@ -49,7 +49,7 @@ Append `已確認的既有對應會直接重用，不會再次建立。` only wh
 
   ```text
   lihi 目前的短網址網域已不在可用清單中，本次縮短已停止。
-  若要繼續縮短，請先要求 agent「切換短網址網域」（使用 `$lihi-switch-domain`）。切換完成後，再使用 `$lihi-shorten`，或重新要求 agent 潤飾／改寫文案。
+  若要繼續縮短，請先要求 agent「切換短網址網域」（使用 `lihi-switch-domain` 技能）。切換完成後，再使用 `lihi-shorten` 技能，或重新要求 agent 潤飾／改寫文案。
 
   以下為未套用本次短網址替換的原本文案：
   <original-inspected-content-snapshot>
@@ -59,7 +59,7 @@ Append `已確認的既有對應會直接重用，不會再次建立。` only wh
 
   ```text
   lihi 目前的工作群組已達短網址建立上限，本次縮短已停止。
-  若要繼續縮短，請先要求 agent「切換工作群組」（使用 `$lihi-switch-group`）。切換完成後，再使用 `$lihi-shorten`，或重新要求 agent 潤飾／改寫文案。
+  若要繼續縮短，請先要求 agent「切換工作群組」（使用 `lihi-switch-group` 技能）。切換完成後，再使用 `lihi-shorten` 技能，或重新要求 agent 潤飾／改寫文案。
 
   以下為未套用本次短網址替換的原本文案：
   <original-inspected-content-snapshot>

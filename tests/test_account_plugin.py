@@ -34,7 +34,6 @@ class AccountPluginTests(unittest.TestCase):
     def setUpClass(cls):
         cls.repo_root = Path(__file__).resolve().parents[1]
         cls.roots = {
-            "codex": cls.repo_root / "plugins/codex/lihi",
             "claude": cls.repo_root / "plugins/claude/lihi",
         }
 
@@ -60,50 +59,37 @@ class AccountPluginTests(unittest.TestCase):
             / "references/error-recovery.md"
         )
 
-    def test_manifests_share_version_and_one_mcp_registration(self):
-        codex = json.loads(
-            self.read(self.roots["codex"] / ".codex-plugin/plugin.json")
-        )
+    def test_manifest_and_one_mcp_registration(self):
         claude = json.loads(
             self.read(self.roots["claude"] / ".claude-plugin/plugin.json")
         )
-        self.assertEqual(codex["name"], "lihi")
         self.assertEqual(claude["name"], "lihi")
-        self.assertEqual(codex["version"], "0.3.2")
         self.assertEqual(claude["version"], "0.3.2")
-        self.assertEqual(codex["version"], claude["version"])
-        self.assertLessEqual(len(codex["interface"]["defaultPrompt"]), 3)
-        self.assertTrue(
-            any("domain" in prompt.lower() for prompt in codex["interface"]["defaultPrompt"])
-        )
-        self.assertTrue(
-            any("automatically" in prompt.lower() for prompt in codex["interface"]["defaultPrompt"])
-        )
+        self.assertEqual(claude["license"], "MIT")
+        self.assertTrue((self.roots["claude"] / "LICENSE").is_file())
 
         for root in self.roots.values():
             config = json.loads(self.read(root / ".mcp.json"))
             self.assertEqual(list(config["mcpServers"]), ["lihi"])
-            self.assertEqual(config["mcpServers"]["lihi"]["url"], PRODUCTION_ENDPOINT)
-            self.assertEqual(config["mcpServers"]["lihi"]["auth"], "oauth")
+            self.assertEqual(
+                config["mcpServers"]["lihi"],
+                {"type": "http", "url": PRODUCTION_ENDPOINT},
+            )
             self.assertEqual(list(root.rglob(".mcp.json")), [root / ".mcp.json"])
             self.assertEqual(
                 {path.name for path in (root / "skills").iterdir() if path.is_dir()},
                 set(SKILLS),
             )
 
-    def test_marketplaces_expose_only_production_lihi(self):
-        paths = (
-            self.repo_root / ".agents/plugins/marketplace.json",
-            self.repo_root / ".claude-plugin/marketplace.json",
+    def test_marketplace_exposes_only_production_lihi(self):
+        marketplace = json.loads(
+            self.read(self.repo_root / ".claude-plugin/marketplace.json")
         )
-        for path in paths:
-            marketplace = json.loads(self.read(path))
-            self.assertEqual(marketplace["name"], "lihi")
-            self.assertEqual([item["name"] for item in marketplace["plugins"]], ["lihi"])
-        codex = json.loads(self.read(paths[0]))
-        claude = json.loads(self.read(paths[1]))
-        self.assertEqual(codex["plugins"][0]["source"]["path"], "./plugins/codex/lihi")
-        self.assertEqual(claude["plugins"][0]["source"], "./plugins/claude/lihi")
+        self.assertEqual(marketplace["name"], "lihi")
+        self.assertEqual([item["name"] for item in marketplace["plugins"]], ["lihi"])
+        self.assertEqual(marketplace["plugins"][0]["source"], "./plugins/claude/lihi")
+        self.assertFalse((self.repo_root / ".agents").exists())
+        self.assertFalse((self.repo_root / "plugins/codex").exists())
 
     def test_all_skills_have_valid_identity_and_no_placeholders(self):
         for host in self.roots:
@@ -297,21 +283,6 @@ class AccountPluginTests(unittest.TestCase):
                 self.assertIn("Never replay it blindly", recovery_content)
                 self.assertIn("Do not load it during the normal successful flow", recovery_content)
 
-        for skill_name in ("lihi-switch-group", "lihi-switch-domain"):
-            codex = (
-                self.roots["codex"]
-                / "skills"
-                / skill_name
-                / "references/error-recovery.md"
-            )
-            claude = (
-                self.roots["claude"]
-                / "skills"
-                / skill_name
-                / "references/error-recovery.md"
-            )
-            self.assertEqual(codex.read_bytes(), claude.read_bytes())
-
     def test_shortening_is_automatic_and_site_create_has_one_argument(self):
         skill_markers = (
             "automatically shorten every eligible new long URL",
@@ -336,10 +307,10 @@ class AccountPluginTests(unittest.TestCase):
             "Keep every earlier validated mapping in the conversation ledger",
             "do not display a current-batch mapping summary or mention earlier creation side effects",
             "以下為未套用本次短網址替換的原本文案：",
-            "使用 `$lihi-switch-group`",
-            "使用 `$lihi-switch-domain`",
-            "使用 `$lihi-account`",
-            "再使用 `$lihi-shorten`",
+            "使用 `lihi-switch-group` 技能",
+            "使用 `lihi-switch-domain` 技能",
+            "使用 `lihi-account` 技能",
+            "再使用 `lihi-shorten` 技能",
             "`site_create` is non-idempotent",
             "本次新建短網址",
             "Copy-only work ends after showing the result",
@@ -387,51 +358,6 @@ class AccountPluginTests(unittest.TestCase):
             self.assertIn("The user must start a later, independent switch or account workflow", workflow)
             self.assertIn("Retain validated mappings even when a later URL", workflow)
 
-    def test_shortening_workflows_and_detectors_are_byte_identical(self):
-        codex = self.roots["codex"] / "skills/lihi-shorten"
-        claude = self.roots["claude"] / "skills/lihi-shorten"
-        self.assertEqual(
-            (codex / "references/shortening-workflow.md").read_bytes(),
-            (claude / "references/shortening-workflow.md").read_bytes(),
-        )
-        self.assertEqual(
-            (codex / "scripts/detect_urls.py").read_bytes(),
-            (claude / "scripts/detect_urls.py").read_bytes(),
-        )
-
-    def test_skill_behavior_is_semantically_identical_across_hosts(self):
-        explicit_host_differences = {
-            "lihi-account": (
-                ("the Codex OAuth recovery rules", "the host OAuth recovery rules"),
-                ("the Claude Code OAuth recovery rules", "the host OAuth recovery rules"),
-            ),
-            "lihi-switch-group": (
-                ("the Codex OAuth recovery rules", "the host OAuth recovery rules"),
-                ("the Claude Code OAuth recovery rules", "the host OAuth recovery rules"),
-            ),
-            "lihi-switch-domain": (
-                ("the Codex OAuth recovery rules", "the host OAuth recovery rules"),
-                ("the Claude Code OAuth recovery rules", "the host OAuth recovery rules"),
-            ),
-            "lihi-shorten": (
-                ("while Codex adjusts", "while the host adjusts"),
-                ("while Claude Code adjusts", "while the host adjusts"),
-                ("before Codex sends", "before the host sends"),
-                ("before Claude Code sends", "before the host sends"),
-                ("every URL introduced by Codex", "every URL introduced by the host"),
-                ("every URL introduced by Claude Code", "every URL introduced by the host"),
-                ("the Codex OAuth recovery rules", "the host OAuth recovery rules"),
-                ("the Claude Code OAuth recovery rules", "the host OAuth recovery rules"),
-            ),
-        }
-        for name, replacements in explicit_host_differences.items():
-            codex = self.skill("codex", name)
-            claude = self.skill("claude", name)
-            for old, new in replacements:
-                codex = codex.replace(old, new)
-                claude = claude.replace(old, new)
-            self.assertEqual(codex, claude, name)
-
     def test_oauth_recovery_has_shared_budgets_and_host_specific_action(self):
         for host in self.roots:
             for skill_name in SKILLS:
@@ -442,11 +368,8 @@ class AccountPluginTests(unittest.TestCase):
                     self.assertRegex(content, r"at most one (host )?refresh|allow one .*refresh")
                     self.assertIn("one resumed", content)
                     self.assertIn("second authentication failure", content.lower())
-                    if host == "codex":
-                        self.assertIn("codex mcp login lihi", content)
-                    else:
-                        self.assertIn("/mcp", content)
-                        self.assertNotIn("codex mcp login", content)
+                    self.assertIn("/mcp", content)
+                    self.assertNotIn("codex mcp login", content)
 
     def test_switch_recovery_never_replays_success_or_uncertainty(self):
         for host in self.roots:
@@ -470,19 +393,6 @@ class AccountPluginTests(unittest.TestCase):
             self.assertIn("call `account_status` once and compare its exact `domain`", domain_error)
             self.assertIn("this reference owns one resumed fresh `group_options` call", group_error)
             self.assertIn("this reference owns one resumed fresh `domain_options` call", domain_error)
-
-    def test_codex_skill_metadata_declares_shared_dependency(self):
-        for name in SKILLS:
-            metadata = self.read(
-                self.roots["codex"] / "skills" / name / "agents/openai.yaml"
-            )
-            self.assertIn('value: "lihi"', metadata)
-            self.assertIn("$" + name, metadata)
-            self.assertIn(PRODUCTION_ENDPOINT, metadata)
-            match = re.search(r'short_description: "([^"]+)"', metadata)
-            self.assertIsNotNone(match)
-            self.assertGreaterEqual(len(match.group(1)), 25)
-            self.assertLessEqual(len(match.group(1)), 64)
 
     def test_docs_freeze_current_contract_and_error_literals(self):
         contract = self.read(self.repo_root / "docs/mcp-contract.md")
@@ -518,6 +428,8 @@ class AccountPluginTests(unittest.TestCase):
                 with self.subTest(path=path, token=token):
                     self.assertNotIn(token, content)
             self.assertIsNone(re.search(r"(?<!account_)\bswitch_group\b", content))
+            with self.subTest(path=path, token="$lihi"):
+                self.assertNotIn("$lihi", content)
 
     def test_guides_are_language_separated_and_internal_guides_do_not_install(self):
         english = [self.repo_root / "README.md"] + [

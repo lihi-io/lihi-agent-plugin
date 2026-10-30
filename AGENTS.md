@@ -11,7 +11,7 @@ These instructions apply to the entire repository.
 
 ## Purpose and identities
 
-This repository packages one lihi plugin for Codex and one for Claude Code. Each has four skills behind one host-managed OAuth MCP registration:
+This repository packages one lihi plugin for Claude (Claude Code, claude.ai, and Cowork) and prepares it for Anthropic's plugin directory. It has four skills behind one host-managed OAuth MCP registration:
 
 | Capability | Production | Develop artifact |
 | --- | --- | --- |
@@ -28,16 +28,15 @@ Checked-in runtime files must remain production-only. Develop identities and end
 
 ## Host and skill responsibilities
 
-- Each host bundle owns exactly one `.mcp.json` and one logical MCP server key.
+- The plugin owns exactly one `.mcp.json` and one logical MCP server key. Declare only `type` and `url`; Claude manages OAuth automatically, so do not add an `auth` key.
 - `lihi-account` uses `account_status` for general status and current group/domain; it uses `group_options` only for available-group listings.
 - `lihi-switch-group` fetches fresh `group_options`, selects by exact ID, calls `account_switch_group`, and displays its AccountStatus result without a follow-up lookup.
 - `lihi-switch-domain` runs only after an explicit user request, fetches fresh `domain_options`, selects by exact hostname, calls `account_switch_domain`, and displays its AccountStatus result without a follow-up lookup. In Chinese selection lists, label owned as `專屬網域 (owned)` and public as `公用網域 (public)`, recommend a dedicated domain, and show `https://lihidomain.com/` as non-selecting workflow metadata.
 - Switch `SKILL.md` files contain only the normal flow and one failure handoff. Load their `references/error-recovery.md` only after a tool failure, invalid successful output, or uncertain dispatch; that reference loads host-specific OAuth rules only for an authentication branch.
 - `lihi-shorten` runs the local detector on the current outbound-copy snapshot during revision or before release and automatically creates every eligible new unique URL.
-- OAuth references are host-specific. Codex uses `codex mcp login lihi` when interactive authentication is required and available; Claude Code uses `/mcp` and **Authenticate**.
-- Codex `agents/openai.yaml` declares UI metadata and the shared MCP dependency.
+- OAuth references tell the user to open `/mcp` and choose **Authenticate** when interactive authentication is required.
 
-The Codex and Claude detector scripts, shortening workflow references, and matching switch error-recovery references must remain byte-for-byte identical. Detector code must remain executable and Python 3.8-compatible. Other skill files need semantic parity while preserving host-specific OAuth wording.
+Detector code must remain executable and Python 3.8-compatible.
 
 ## Authorization boundaries
 
@@ -105,39 +104,24 @@ AccountStatus requires a non-empty `email:string`, `group_name:string|null`, `do
 
 ## Release packaging and versioning
 
-CI runs Python 3.8 unit tests and parity checks. Develop-branch CI builds a
-develop marketplace for 14-day retention. SemVer tag CI builds one portable
-OpenAI plugin ZIP, four individual skill ZIPs, and one production marketplace
-bundle for 90-day retention.
+CI runs Python 3.8 unit tests and syntax checks. Develop-branch CI builds a
+develop marketplace for 14-day retention. SemVer tag CI builds one production
+marketplace bundle for 90-day retention.
 
 The develop packager:
 
-- derives a shared `major.minor.patch` core from both host manifests;
-- rewrites copied identities, endpoints, four skill folders, manifests, marketplaces, and Codex metadata only inside staging;
-- adds `+codex.<build-number>` only to the staged Codex develop manifest; production manifests and the Claude develop manifest have no Codex cachebuster;
+- derives the `major.minor.patch` core from the plugin manifest;
+- rewrites copied identities, endpoints, four skill folders, the manifest, and the marketplace only inside staging;
 - emits `DEVELOP_BUILD.json`, where authoritative `skill_names` contains all four develop skills;
 - retains singular `skill_name` at root and `plugins[0]` as a deprecated alias equal to `skill_names[0]` for 0.3 compatibility;
 - excludes caches and preserves source runtime files unchanged.
 
 The production marketplace packager copies the checked-in production
-marketplaces, both host plugins, and public installation guides without
+marketplace, the plugin, and public installation guides without
 rewriting identities or endpoints. It emits `lihi-agent-<major.minor.patch>`
 and fails rather than overwriting an existing output directory.
 
-The OpenAI Platform packager emits one portable `lihi-<version>.zip`
-with root `plugin.json`, root `mcp.json`, all four skills under `skills/`, and
-approved brand images under `assets/`. Both JSON files declare the Agent Plugins
-1.0.0 schemas. OpenAI presentation belongs in `extensions.com.openai.interface`;
-the MCP server uses `type: "streamable-http"` and declares OAuth under its own
-`extensions.com.openai.auth`, leaving optional discovery settings unspecified.
-The packager does not accept an app ID or emit a marketplace, `.app.json`, hooks,
-or legacy host manifests. It also emits four `<skill-name>-<version>.zip`
-archives, each with one same-named top-level skill directory. The individual
-skills match the staged plugin skills byte-for-byte, including detector mode.
-All five archives are validated before publication; a failed publication rolls
-back the entire artifact set. Source host bundles stay unchanged.
-
-Both checked-in production manifests must use version `0.3.2` without build metadata. A Codex cachebuster is allowed only in a generated develop bundle. Validate the Codex plugin after modifying its bundle. Reinstall only when explicitly requested; after reinstall, test from a new conversation.
+The checked-in production manifest must use version `0.3.2` without build metadata. Run `claude plugin validate --strict plugins/claude/lihi` after modifying the plugin. Reinstall only when explicitly requested; after reinstall, test from a new conversation.
 
 Never commit `dist/`, a develop/localhost runtime URL, or a develop identity in production runtime configuration.
 
@@ -147,15 +131,24 @@ Run at least:
 
 ```bash
 python3 -m unittest discover -s tests -v
-cmp plugins/codex/lihi/skills/lihi-shorten/scripts/detect_urls.py plugins/claude/lihi/skills/lihi-shorten/scripts/detect_urls.py
-cmp plugins/codex/lihi/skills/lihi-shorten/references/shortening-workflow.md plugins/claude/lihi/skills/lihi-shorten/references/shortening-workflow.md
+claude plugin validate --strict plugins/claude/lihi
+claude plugin validate .
 git diff --check
 ```
 
 For packaging changes, also build locally with
-`scripts/package_develop_bundle.py`, `scripts/package_production_bundle.py`,
-and `scripts/package_openai_platform_bundle.py`. Validate all host plugins,
-production/develop identity isolation, endpoint isolation, metadata aliases,
-the portable OpenAI plugin archive and four individual skill archives, and
-absence of removed tool fields and
-stale policies.
+`scripts/package_develop_bundle.py` and `scripts/package_production_bundle.py`.
+Validate the plugin, production/develop identity isolation, endpoint isolation,
+metadata aliases, and absence of removed tool fields and stale policies.
+
+## Directory submission
+
+Before submitting to Anthropic's directory, keep the plugin folder free of
+`.DS_Store`, caches, symbolic links, and binary files other than the listing
+icon; keep `LICENSE` and a README of at least 40 words in the plugin folder;
+and describe in the README everything the plugin sends to lihi. Submit the
+`plugins/claude/lihi` folder.
+
+The listing icon is `.claude-plugin/icon.png`, a square 1080 px PNG. The
+directory reads it only the first time the plugin is saved or submitted, so
+replacing it later does not change the listing icon.

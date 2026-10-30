@@ -2,8 +2,7 @@
   "mcpServers": {
     "lihi": {
       "type": "http",
-      "url": "https://app.lihi.io/mcp/v1/tools",
-      "auth": "oauth"
+      "url": "https://app.lihi.io/mcp/v1/tools"
     }
   }
 }

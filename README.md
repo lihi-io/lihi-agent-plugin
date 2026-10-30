@@ -2,7 +2,7 @@
 
 Other languages: [Traditional Chinese guide](README.zh-TW.md).
 
-Use lihi account status, group and short URL domain switching, and URL shortening from one Codex or Claude Code plugin.
+Use lihi account status, group and short URL domain switching, and URL shortening from one Claude Code plugin.
 
 ## Plugin
 
@@ -28,15 +28,6 @@ The production marketplace is available from [lihi-io/lihi-agent-plugin.git](htt
 
 ### Install directly from GitHub
 
-#### Codex
-
-```bash
-codex plugin marketplace add https://github.com/lihi-io/lihi-agent-plugin.git
-codex plugin add lihi@lihi
-```
-
-#### Claude Code
-
 ```bash
 claude plugin marketplace add https://github.com/lihi-io/lihi-agent-plugin.git
 claude plugin install lihi@lihi
@@ -45,17 +36,8 @@ claude plugin install lihi@lihi
 ### Install after downloading to local disk
 
 1. Download the repository archive from GitHub and extract it. A local Git clone works as well.
-2. Locate the extracted repository root containing `.agents/plugins/marketplace.json` and `.claude-plugin/marketplace.json`.
+2. Locate the extracted repository root containing `.claude-plugin/marketplace.json`.
 3. Replace `/absolute/path/to/lihi-agent-plugin` below with that repository root.
-
-#### Codex
-
-```bash
-codex plugin marketplace add /absolute/path/to/lihi-agent-plugin
-codex plugin add lihi@lihi
-```
-
-#### Claude Code
 
 ```bash
 claude plugin marketplace add /absolute/path/to/lihi-agent-plugin
@@ -66,15 +48,7 @@ Do not pass the downloaded ZIP file itself to the marketplace command. Extract i
 
 ## Authenticate
 
-### Codex
-
-Codex may ask you to authenticate lihi during installation or the first time the plugin is used. If a task still detects that initial authentication is required, or detects a qualifying refresh-token failure that requires reauthentication, Codex first assists by running `codex mcp login lihi` once. If that assisted command cannot start or does not complete authentication, run `codex mcp login lihi` yourself in a terminal. If the command is unavailable, open **MCP settings → lihi → Authenticate**. With prior lihi authorization, an ordinary tool-endpoint `401 invalid_token` or `Auth required` first uses one host-managed refresh attempt and does not by itself start interactive login.
-
-After installing or updating, start a new Codex conversation before using the plugin. If the Codex app still shows the old plugin version, fully quit and reopen the application as a fallback, then start another new conversation.
-
-### Claude Code
-
-When authentication is required, open `/mcp`, select lihi, and choose **Authenticate**.
+When authentication is required, open `/mcp`, select lihi, and choose **Authenticate**. With prior lihi authorization, an ordinary tool-endpoint `401 invalid_token` or `Auth required` first uses one host-managed refresh attempt and does not by itself start interactive login.
 
 After installing or updating, start a new Claude Code conversation.
 
@@ -114,7 +88,7 @@ The plugin always fetches `domain_options` first and calls `account_switch_domai
 
 ## Shorten URLs
 
-Ask Codex or Claude Code to polish copy containing links, or to prepare that content for release. For example:
+Ask Claude Code to polish copy containing links, or to prepare that content for release. For example:
 
 ```text
 Polish this post and shorten its links:
@@ -132,4 +106,4 @@ Confirmed short URLs and mappings are retained across later edits in the same co
 
 If shortening reports an unavailable group/account, unavailable domain, or work-group quota limit, it stops the batch and any requested release, makes no automatic selector change, and shows the original inspected copy unchanged. Follow the prompt to switch the group or domain explicitly, then invoke shortening again or ask the agent to polish or rewrite the copy again.
 
-For host-specific authentication and behavior details, see the [Codex guide](plugins/codex/lihi/README.md) or [Claude Code guide](plugins/claude/lihi/README.md).
+For plugin authentication and behavior details, see the [plugin guide](plugins/claude/lihi/README.md).

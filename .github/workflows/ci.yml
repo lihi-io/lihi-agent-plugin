@@ -49,15 +49,7 @@ jobs:
           python -m compileall -q
           scripts
           tests
-          plugins/codex/lihi/skills/lihi-shorten/scripts
           plugins/claude/lihi/skills/lihi-shorten/scripts
-
-      - name: Check Codex and Claude parity
-        run: |
-          cmp plugins/codex/lihi/skills/lihi-shorten/scripts/detect_urls.py plugins/claude/lihi/skills/lihi-shorten/scripts/detect_urls.py
-          cmp plugins/codex/lihi/skills/lihi-shorten/references/shortening-workflow.md plugins/claude/lihi/skills/lihi-shorten/references/shortening-workflow.md
-          cmp plugins/codex/lihi/skills/lihi-switch-group/references/error-recovery.md plugins/claude/lihi/skills/lihi-switch-group/references/error-recovery.md
-          cmp plugins/codex/lihi/skills/lihi-switch-domain/references/error-recovery.md plugins/claude/lihi/skills/lihi-switch-domain/references/error-recovery.md
 
       - name: Check whitespace errors
         run: git diff --check "$(git hash-object -t tree /dev/null)" HEAD -- .

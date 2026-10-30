@@ -28,33 +28,16 @@ SKILLS = (
     "lihi-switch-group",
     "lihi-switch-domain",
 )
-PLUGIN_ROOTS = (
-    Path("plugins/codex/lihi"),
-    Path("plugins/claude/lihi"),
-)
-PLUGIN_MANIFESTS = (
-    Path("plugins/codex/lihi/.codex-plugin/plugin.json"),
-    Path("plugins/claude/lihi/.claude-plugin/plugin.json"),
-)
-MARKETPLACE_MANIFESTS = (
-    Path(".agents/plugins/marketplace.json"),
-    Path(".claude-plugin/marketplace.json"),
-)
+PLUGIN_ROOT = Path("plugins/claude/lihi")
+PLUGIN_MANIFEST = PLUGIN_ROOT / ".claude-plugin/plugin.json"
+MARKETPLACE_MANIFEST = Path(".claude-plugin/marketplace.json")
 INCLUDED_PATHS = (
-    Path(".agents"),
     Path(".claude-plugin"),
-    *PLUGIN_ROOTS,
+    PLUGIN_ROOT,
     Path("README.md"),
     Path("README.zh-TW.md"),
 )
-RUNTIME_ENDPOINT_FILES = (
-    Path("plugins/codex/lihi/.mcp.json"),
-    Path("plugins/codex/lihi/skills/lihi-shorten/agents/openai.yaml"),
-    Path("plugins/codex/lihi/skills/lihi-account/agents/openai.yaml"),
-    Path("plugins/codex/lihi/skills/lihi-switch-group/agents/openai.yaml"),
-    Path("plugins/codex/lihi/skills/lihi-switch-domain/agents/openai.yaml"),
-    Path("plugins/claude/lihi/.mcp.json"),
-)
+RUNTIME_ENDPOINT_FILES = (PLUGIN_ROOT / ".mcp.json",)
 
 SEMVER_PATTERN = re.compile(
     r"^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)"
@@ -92,23 +75,15 @@ def semantic_version_core(version: object, manifest: Path) -> str:
 
 
 def release_version(repo_root: Path) -> str:
-    versions = set()
-    for relative_path in PLUGIN_MANIFESTS:
-        path = repo_root / relative_path
-        manifest = read_json(path)
-        manifest_version = manifest.get("version")
-        version_core = semantic_version_core(manifest_version, path)
-        if manifest_version != version_core:
-            raise PackagingError(
-                "Production manifests must use plain major.minor.patch "
-                "versions without build metadata: {0}".format(path)
-            )
-        versions.add(version_core)
-    if len(versions) != 1:
+    path = repo_root / PLUGIN_MANIFEST
+    manifest_version = read_json(path).get("version")
+    version_core = semantic_version_core(manifest_version, path)
+    if manifest_version != version_core:
         raise PackagingError(
-            "Codex and Claude manifests must share one major.minor.patch version"
+            "Production manifests must use plain major.minor.patch "
+            "versions without build metadata: {0}".format(path)
         )
-    return versions.pop()
+    return version_core
 
 
 def marketplace_plugin(marketplace: dict, path: Path) -> dict:
@@ -119,15 +94,6 @@ def marketplace_plugin(marketplace: dict, path: Path) -> dict:
     if not isinstance(plugin, dict) or plugin.get("name") != PLUGIN_NAME:
         raise PackagingError("Marketplace plugin must be production lihi: {0}".format(path))
     return plugin
-
-
-def marketplace_source_path(plugin: dict, codex: bool) -> object:
-    source = plugin.get("source")
-    if codex:
-        if not isinstance(source, dict):
-            return None
-        return source.get("path")
-    return source
 
 
 def validate_mcp(path: Path) -> None:
@@ -142,62 +108,43 @@ def validate_mcp(path: Path) -> None:
 
 def validate_source_bundle(repo_root: Path) -> str:
     version = release_version(repo_root)
-    expected_sources = (
-        "./plugins/codex/lihi",
-        "./plugins/claude/lihi",
-    )
-    for index, relative_path in enumerate(MARKETPLACE_MANIFESTS):
-        path = repo_root / relative_path
-        marketplace = read_json(path)
-        if marketplace.get("name") != MARKETPLACE_NAME:
-            raise PackagingError("Marketplace must be production lihi: {0}".format(path))
-        plugin = marketplace_plugin(marketplace, path)
-        if marketplace_source_path(plugin, codex=index == 0) != expected_sources[index]:
-            raise PackagingError("Marketplace source is invalid: {0}".format(path))
-        interface = marketplace.get("interface")
-        display_name = (
-            interface.get("displayName")
-            if index == 0 and isinstance(interface, dict)
-            else plugin.get("displayName")
-        )
-        if display_name != DISPLAY_NAME:
-            raise PackagingError("Marketplace display name is invalid: {0}".format(path))
+    path = repo_root / MARKETPLACE_MANIFEST
+    marketplace = read_json(path)
+    if marketplace.get("name") != MARKETPLACE_NAME:
+        raise PackagingError("Marketplace must be production lihi: {0}".format(path))
+    plugin = marketplace_plugin(marketplace, path)
+    if plugin.get("source") != "./" + PLUGIN_ROOT.as_posix():
+        raise PackagingError("Marketplace source is invalid: {0}".format(path))
+    if plugin.get("displayName") != DISPLAY_NAME:
+        raise PackagingError("Marketplace display name is invalid: {0}".format(path))
 
-    for index, relative_path in enumerate(PLUGIN_MANIFESTS):
-        path = repo_root / relative_path
-        manifest = read_json(path)
-        interface = manifest.get("interface")
-        display_name = (
-            interface.get("displayName")
-            if index == 0 and isinstance(interface, dict)
-            else manifest.get("displayName")
-        )
-        if manifest.get("name") != PLUGIN_NAME or display_name != DISPLAY_NAME:
-            raise PackagingError("Plugin manifest must be production lihi: {0}".format(path))
+    path = repo_root / PLUGIN_MANIFEST
+    manifest = read_json(path)
+    if manifest.get("name") != PLUGIN_NAME or manifest.get("displayName") != DISPLAY_NAME:
+        raise PackagingError("Plugin manifest must be production lihi: {0}".format(path))
 
-    for plugin_root in PLUGIN_ROOTS:
-        root = repo_root / plugin_root
-        if root.is_symlink() or not root.is_dir():
-            raise PackagingError("Production plugin root is missing: {0}".format(root))
-        validate_mcp(root / ".mcp.json")
-        skills_root = root / "skills"
-        actual_skills = {
-            path.name
-            for path in skills_root.iterdir()
-            if path.is_dir() and not path.is_symlink()
-        }
-        if actual_skills != set(SKILLS):
-            raise PackagingError(
-                "Production skill set is invalid in {0}: {1!r}".format(
-                    skills_root,
-                    tuple(sorted(actual_skills)),
-                )
+    root = repo_root / PLUGIN_ROOT
+    if root.is_symlink() or not root.is_dir():
+        raise PackagingError("Production plugin root is missing: {0}".format(root))
+    validate_mcp(root / ".mcp.json")
+    skills_root = root / "skills"
+    actual_skills = {
+        path.name
+        for path in skills_root.iterdir()
+        if path.is_dir() and not path.is_symlink()
+    }
+    if actual_skills != set(SKILLS):
+        raise PackagingError(
+            "Production skill set is invalid in {0}: {1!r}".format(
+                skills_root,
+                tuple(sorted(actual_skills)),
             )
-        for skill_name in SKILLS:
-            skill_path = skills_root / skill_name / "SKILL.md"
-            content = skill_path.read_text(encoding="utf-8")
-            if "\nname: {0}\n".format(skill_name) not in content:
-                raise PackagingError("Production skill identity is invalid: {0}".format(skill_path))
+        )
+    for skill_name in SKILLS:
+        skill_path = skills_root / skill_name / "SKILL.md"
+        content = skill_path.read_text(encoding="utf-8")
+        if "\nname: {0}\n".format(skill_name) not in content:
+            raise PackagingError("Production skill identity is invalid: {0}".format(skill_path))
 
     for relative_path in RUNTIME_ENDPOINT_FILES:
         path = repo_root / relative_path
@@ -205,18 +152,7 @@ def validate_source_bundle(repo_root: Path) -> str:
         if PRODUCTION_ENDPOINT not in content or DEVELOP_ORIGIN in content:
             raise PackagingError("Runtime endpoint is not production-only: {0}".format(path))
 
-    codex_skills = repo_root / "plugins/codex/lihi/skills"
-    for skill_name in SKILLS:
-        metadata_path = codex_skills / skill_name / "agents/openai.yaml"
-        metadata = metadata_path.read_text(encoding="utf-8")
-        if (
-            "$" + skill_name not in metadata
-            or 'value: "lihi"' not in metadata
-            or PRODUCTION_ENDPOINT not in metadata
-        ):
-            raise PackagingError("Codex production dependency is invalid: {0}".format(metadata_path))
-
-    detector = codex_skills / "lihi-shorten/scripts/detect_urls.py"
+    detector = skills_root / "lihi-shorten/scripts/detect_urls.py"
     if not detector.stat().st_mode & 0o111:
         raise PackagingError("Production detector must remain executable: {0}".format(detector))
     return version
@@ -284,7 +220,7 @@ def validate_staged_package(staging_root: Path, version: str) -> None:
         if DEVELOP_ORIGIN in content or "lihi-dev" in content:
             raise PackagingError("Develop identity found in production package: {0}".format(path))
 
-    source_detector = staging_root / "plugins/codex/lihi/skills/lihi-shorten/scripts/detect_urls.py"
+    source_detector = staging_root / PLUGIN_ROOT / "skills/lihi-shorten/scripts/detect_urls.py"
     if not source_detector.stat().st_mode & 0o111:
         raise PackagingError("Packaged detector must remain executable")
 
